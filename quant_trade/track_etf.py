@@ -18,6 +18,9 @@ def get_etf_data():
         ticker_obj = yf.Ticker(ticker)
         df = ticker_obj.history(period="2y") # 抓取2年确保均线饱满
         
+        # 【核心修复】先将因时差/清算导致的末尾 NaN 行彻底剔除，确保拿到的是真实的最新收盘日
+        df = df.dropna(subset=['Close'])
+        
         # 计算 MA50 和 MA200
         df['MA50'] = df['Close'].rolling(window=50).mean()
         df['MA200'] = df['Close'].rolling(window=200).mean()
