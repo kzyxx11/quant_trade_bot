@@ -28,5 +28,7 @@ jobs:
         # 让云端服务器安全读取你的 Telegram 隐私密钥
         TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
         TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+      # 💥 就是下面这一行！告诉服务器代码在 quant_trade 文件夹里
+      working-directory: ./quant_trade
       run: |
         python track_etf.py
