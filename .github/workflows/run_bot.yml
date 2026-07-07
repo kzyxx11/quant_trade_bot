@@ -2,9 +2,9 @@ name: 7x24h Live Quant Bot
 
 on:
   schedule:
-    # 每天吉隆坡时间早上 6:30（美股收盘后半小时，换算成 UTC 时间是 22:30）自动在云端唤醒执行
+    # It automatically wakes up and executes in the cloud every day at 6:30 AM Kuala Lumpur time (half an hour after the US stock market closes, which is 10:30 PM UTC).
     - cron: '30 22 * * *'
-  workflow_dispatch: # 允许你在 GitHub 网页上点击按钮随时手动触发测试
+  workflow_dispatch: # Allows you to manually trigger tests at any time by clicking a button on the GitHub webpage.
 
 jobs:
   run-quant-bot:
@@ -25,10 +25,10 @@ jobs:
 
     - name: Execute Quant Tracker
       env:
-        # 让云端服务器安全读取你的 Telegram 隐私密钥
+        # Allow cloud servers to securely access your Telegram privacy key.
         TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
         TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-      # 💥 就是下面这一行！告诉服务器代码在 quant_trade 文件夹里
+      
       working-directory: ./quant_trade
       run: |
         python track_etf.py
