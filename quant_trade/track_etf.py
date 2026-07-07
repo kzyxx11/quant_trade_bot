@@ -1,199 +1,289 @@
+import html
 import os
 import time
-import html
-import yfinance as yf
-import pandas as pd
-import matplotlib.pyplot as plt
-import requests
+from pathlib import Path
 
-# 1. Securely read environment variables (without compromising privacy).
+import matplotlib.pyplot as plt
+import pandas as pd
+import requests
+import yfinance as yf
+
+
 TELEGRAM_TOKEN = os.getenv("TG_BOT_TOKEN")
 CHAT_ID = os.getenv("TG_CHAT_ID")
 
-# ETF config: ticker -> display name, currency code, currency symbol
+MIN_ROWS_REQUIRED = 200
+CHART_LOOKBACK_ROWS = 252
+OUTPUT_DIR = Path("outputs")
+CHART_PATH = OUTPUT_DIR / "etf_trend.png"
+
+
 ETFS = {
-    'CSPX.L': {'name': 'CSPX (iShares Core S&P 500)', 'currency': 'GBP', 'sign': '£'},
-    'QQQM':   {'name': 'QQQM (Invesco NASDAQ 100)',   'currency': 'USD', 'sign': '$'},
+    "CSPX.L": {
+        "name": "CSPX (iShares Core S&P 500 UCITS ETF)",
+        "currency": "USD",
+        "symbol": "$",
+    },
+    "QQQM": {
+        "name": "QQQM (Invesco NASDAQ 100 ETF)",
+        "currency": "USD",
+        "symbol": "$",
+    },
 }
 
-MIN_ROWS_REQUIRED = 200  # need at least 200 trading days for a valid MA200
 
-
-def get_etf_data():
-    print("Fetching the latest historical data from Yahoo Finance...")
-    data_dict = {}
+def fetch_etf_data():
+    print("Fetching latest ETF price data from Yahoo Finance...")
+    data = {}
 
     for ticker, meta in ETFS.items():
         try:
-            ticker_obj = yf.Ticker(ticker)
-            df = ticker_obj.history(period="2y")  # 2 years of data for a robust moving average
-        except Exception as e:
-            print(f"Warning: failed to fetch data for {ticker} ({e}). Skipping this ETF.")
+            df = yf.Ticker(ticker).history(period="2y", auto_adjust=False)
+        except Exception as error:
+            print(f"Warning: failed to fetch {ticker}: {error}")
             continue
 
         if df is None or df.empty:
-            print(f"Warning: no data returned for {ticker}. Skipping this ETF.")
+            print(f"Warning: no data returned for {ticker}.")
             continue
 
-        df = df.dropna(subset=['Close'])
+        df = df.dropna(subset=["Close"]).copy()
 
         if len(df) < MIN_ROWS_REQUIRED:
-            print(f"Warning: only {len(df)} rows of data for {ticker}, "
-                  f"need at least {MIN_ROWS_REQUIRED} for a reliable MA200. Skipping this ETF.")
+            print(
+                f"Warning: {ticker} has only {len(df)} valid rows; "
+                f"{MIN_ROWS_REQUIRED} rows are required for MA200."
+            )
             continue
 
-        # Calculate MA50 and MA200
-        df['MA50'] = df['Close'].rolling(window=50).mean()
-        df['MA200'] = df['Close'].rolling(window=200).mean()
+        df["MA50"] = df["Close"].rolling(window=50).mean()
+        df["MA200"] = df["Close"].rolling(window=200).mean()
+        df = df.dropna(subset=["MA50", "MA200"])
 
-        # Use the most recent year of data for charting (fall back to all available rows if fewer)
-        df_recent = df.iloc[-252:] if len(df) >= 252 else df
-
-        if pd.isna(df_recent['MA50'].iloc[-1]) or pd.isna(df_recent['MA200'].iloc[-1]):
-            print(f"Warning: MA50/MA200 could not be computed for {ticker} (insufficient data). Skipping.")
+        if df.empty:
+            print(f"Warning: moving averages could not be calculated for {ticker}.")
             continue
 
-        data_dict[ticker] = {"df": df_recent, "name": meta['name'],
-                              "currency": meta['currency'], "sign": meta['sign']}
+        data[ticker] = {
+            "df": df.tail(CHART_LOOKBACK_ROWS),
+            "name": meta["name"],
+            "currency": meta["currency"],
+            "symbol": meta["symbol"],
+        }
 
-    return data_dict
+    return data
 
 
-def generate_chart(data_dict):
-    if not data_dict:
-        print("No data available, skipping chart generation.")
+def classify_trend(close_price, ma50, ma200):
+    if close_price <= ma200:
+        return {
+            "label": "Risk Zone",
+            "headline": "Price is below the long-term trend line.",
+            "detail": (
+                "The ETF is trading below MA200, which suggests weaker market "
+                "structure. Consider a more defensive allocation or smaller staged entries."
+            ),
+        }
+
+    if close_price < ma50:
+        return {
+            "label": "Pullback Buy Zone",
+            "headline": "Price is below MA50 but still above MA200.",
+            "detail": (
+                "The ETF is in a medium-term pullback while the long-term trend "
+                "remains intact. This can be monitored as a potential accumulation zone."
+            ),
+        }
+
+    return {
+        "label": "Bullish Trend",
+        "headline": "Price is above the medium-term trend line.",
+        "detail": (
+            "The ETF is trading above MA50 and MA200, which indicates healthy "
+            "upward momentum."
+        ),
+    }
+
+
+def generate_chart(data):
+    if not data:
+        print("No valid ETF data available. Skipping chart generation.")
         return None
 
-    print("Generating dual moving average trend chart...")
-    tickers = list(data_dict.keys())
-    fig, axes = plt.subplots(len(tickers), 1, figsize=(12, 4 * len(tickers)), sharex=False)
+    print("Generating MA50/MA200 trend chart...")
+    OUTPUT_DIR.mkdir(exist_ok=True)
+
+    tickers = list(data.keys())
+    fig, axes = plt.subplots(
+        len(tickers),
+        1,
+        figsize=(12, 4.5 * len(tickers)),
+        sharex=False,
+        constrained_layout=True,
+    )
 
     if len(tickers) == 1:
         axes = [axes]
 
-    colors = ['#1e6091', '#d90429']
+    price_colors = ["#1E6091", "#D90429", "#6A4C93", "#2A9D8F"]
 
-    for ax, ticker, color in zip(axes, tickers, colors):
-        info = data_dict[ticker]
-        df = info['df']
-        sign = info['sign']
+    for index, ticker in enumerate(tickers):
+        ax = axes[index]
+        info = data[ticker]
+        df = info["df"]
+        price_color = price_colors[index % len(price_colors)]
 
-        ax.plot(df.index, df['Close'], color=color, linewidth=2, label='Price')
-        ax.plot(df.index, df['MA50'], color='#52b788', linestyle='--', label='MA50 (Mid-term)')
-        ax.plot(df.index, df['MA200'], color='#b7094c', linestyle='-', linewidth=2, label='MA200 (Long-term)')
-        ax.fill_between(df.index, df['Close'], color=color, alpha=0.05)
-        ax.set_title(info['name'], fontsize=12, loc='left', weight='bold')
+        ax.plot(df.index, df["Close"], color=price_color, linewidth=2, label="Close")
+        ax.plot(df.index, df["MA50"], color="#2A9D8F", linestyle="--", linewidth=1.7, label="MA50")
+        ax.plot(df.index, df["MA200"], color="#C1121F", linewidth=1.9, label="MA200")
+        ax.fill_between(df.index, df["Close"], color=price_color, alpha=0.06)
+
+        latest_close = df["Close"].iloc[-1]
+        latest_ma50 = df["MA50"].iloc[-1]
+        latest_ma200 = df["MA200"].iloc[-1]
+        trend = classify_trend(latest_close, latest_ma50, latest_ma200)
+
+        ax.set_title(f"{info['name']} - {trend['label']}", fontsize=12, loc="left", weight="bold")
         ax.set_ylabel(f"Price ({info['currency']})")
-        ax.grid(True, linestyle=':', alpha=0.6)
-        ax.legend(loc='upper left')
-        ax.text(df.index[-1], df['Close'].iloc[-1], f" {sign}{df['Close'].iloc[-1]:.2f}",
-                color=color, weight='bold')
+        ax.grid(True, linestyle=":", alpha=0.55)
+        ax.legend(loc="upper left")
+        ax.annotate(
+            f"{info['symbol']}{latest_close:.2f}",
+            xy=(df.index[-1], latest_close),
+            xytext=(8, 0),
+            textcoords="offset points",
+            color=price_color,
+            weight="bold",
+            va="center",
+        )
 
     axes[-1].set_xlabel("Date")
-    plt.suptitle("ETF Strategy Monitor: MA50 & MA200 Trend Filter", fontsize=14, weight='bold')
-    plt.tight_layout()
+    fig.suptitle("ETF Dual Moving Average Trend Monitor", fontsize=15, weight="bold")
+    fig.savefig(CHART_PATH, dpi=160, bbox_inches="tight")
+    plt.close(fig)
 
-    chart_path = "etf_trend.png"
-    plt.savefig(chart_path, dpi=150)
-    plt.close()
-    return chart_path
+    return CHART_PATH
 
 
-def build_message(data_dict):
-    """
-    Builds an HTML-formatted message for Telegram.
-    HTML parse_mode is used instead of Markdown/MarkdownV2 because Telegram's
-    MarkdownV2 requires escaping a long list of special characters (. ! - ( ) etc.),
-    which is error-prone. HTML only requires escaping &, <, and >.
-    """
-    if not data_dict:
-        return "⚠️ <b>ETF Trend Monitor</b>\n\nNo data could be retrieved this run. Please check the data source or try again later."
+def build_message(data):
+    if not data:
+        return (
+            "<b>ETF Trend Monitor</b>\n\n"
+            "No valid ETF data was retrieved in this run. Please check Yahoo Finance "
+            "availability or try again later."
+        )
 
-    msg = "📊 <b>ETF Dual Moving Average Trend Monitor</b>\n\n"
+    message_parts = ["<b>ETF Dual Moving Average Trend Monitor</b>\n"]
 
-    for ticker, info in data_dict.items():
-        df = info['df']
-        name = html.escape(info['name'])
-        currency = info['currency']
-        sign = info['sign']
-
-        close_price = df['Close'].iloc[-1]
-        ma50 = df['MA50'].iloc[-1]
-        ma200 = df['MA200'].iloc[-1]
-
+    for ticker, info in data.items():
+        df = info["df"]
+        close_price = df["Close"].iloc[-1]
+        ma50 = df["MA50"].iloc[-1]
+        ma200 = df["MA200"].iloc[-1]
         dev50 = ((close_price - ma50) / ma50) * 100
         dev200 = ((close_price - ma200) / ma200) * 100
+        trend = classify_trend(close_price, ma50, ma200)
 
-        # Core three-zone strategy logic
-        if close_price < ma50 and close_price > ma200:
-            status_text = (
-                "🚨 <b>Pullback buy signal</b>\n"
-                "Price has dipped below the 50-day moving average (MA50) but is still holding "
-                "above the 200-day long-term moving average (MA200) — a favorable entry zone "
-                "for dollar-cost averaging."
+        name = html.escape(info["name"])
+        symbol = info["symbol"]
+        currency = html.escape(info["currency"])
+
+        message_parts.append(
+            "\n".join(
+                [
+                    f"<b>{name}</b>",
+                    f"<b>{html.escape(trend['label'])}</b>: {html.escape(trend['headline'])}",
+                    html.escape(trend["detail"]),
+                    f"Latest close: {symbol}{close_price:.2f} ({currency})",
+                    f"MA50: {symbol}{ma50:.2f} | Deviation: {dev50:+.1f}%",
+                    f"MA200: {symbol}{ma200:.2f} | Deviation: {dev200:+.1f}%",
+                ]
             )
-        elif close_price < ma200:
-            status_text = (
-                "🔻 <b>High alert: deep pullback</b>\n"
-                "Price has broken below the 200-day long-term trend line, signaling a deep "
-                "downturn. Consider spacing out purchases into smaller increments and avoid "
-                "committing all capital at once."
-            )
+        )
+
+    return "\n\n".join(message_parts)
+
+
+def post_telegram_request(url, payload, files=None):
+    response = requests.post(url, data=payload, files=files, timeout=30)
+    response.raise_for_status()
+    return response
+
+
+def split_telegram_message(text, limit=3900):
+    if len(text) <= limit:
+        return [text]
+
+    chunks = []
+    current = []
+    current_length = 0
+
+    for block in text.split("\n\n"):
+        block_length = len(block) + 2
+        if current and current_length + block_length > limit:
+            chunks.append("\n\n".join(current))
+            current = [block]
+            current_length = block_length
         else:
-            status_text = (
-                "✅ <b>Healthy uptrend</b>\n"
-                "Price is trading above both moving averages. The trend remains strong — "
-                "continue with the regular investment plan."
-            )
+            current.append(block)
+            current_length += block_length
 
-        msg += f"<b>{name}</b>\n"
-        msg += f"{status_text}\n"
-        msg += f"  - Latest close: {sign}{close_price:.2f} ({currency})\n"
-        msg += f"  - MA50 (mid-term): {sign}{ma50:.2f} (deviation: {dev50:.1f}%)\n"
-        msg += f"  - MA200 (long-term): {sign}{ma200:.2f} (deviation: {dev200:.1f}%)\n\n"
+    if current:
+        chunks.append("\n\n".join(current))
 
-    return msg
+    return chunks
 
 
-def send_to_telegram(chart_path, text_msg, retries=3, backoff_seconds=5):
+def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
     if not TELEGRAM_TOKEN or not CHAT_ID:
-        print("Error: environment variable TG_BOT_TOKEN or TG_CHAT_ID not set. Please configure it first.")
-        return
+        print("Error: TG_BOT_TOKEN and TG_CHAT_ID must be configured as repository secrets.")
+        return False
 
-    print("Sending update to Telegram...")
     photo_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
     text_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
     for attempt in range(1, retries + 1):
         try:
-            if chart_path and os.path.exists(chart_path):
-                with open(chart_path, 'rb') as photo:
-                    payload = {'chat_id': CHAT_ID, 'caption': text_msg, 'parse_mode': 'HTML'}
-                    files = {'photo': photo}
-                    response = requests.post(photo_url, data=payload, files=files, timeout=30)
-            else:
-                # No chart available (e.g. all ETFs failed to fetch) — send text only
-                payload = {'chat_id': CHAT_ID, 'text': text_msg, 'parse_mode': 'HTML'}
-                response = requests.post(text_url, data=payload, timeout=30)
+            if chart_path and Path(chart_path).exists():
+                with Path(chart_path).open("rb") as photo:
+                    post_telegram_request(
+                        photo_url,
+                        {
+                            "chat_id": CHAT_ID,
+                            "caption": "ETF trend chart",
+                        },
+                        files={"photo": photo},
+                    )
 
-            if response.status_code == 200:
-                print("Telegram message sent successfully!")
-                return
-            else:
-                print(f"Telegram push failed (attempt {attempt}/{retries}): "
-                      f"status={response.status_code}, reason={response.text}")
+            for message_part in split_telegram_message(text_message):
+                post_telegram_request(
+                    text_url,
+                    {
+                        "chat_id": CHAT_ID,
+                        "text": message_part,
+                        "parse_mode": "HTML",
+                    },
+                )
 
-        except requests.RequestException as e:
-            print(f"Network error while sending to Telegram (attempt {attempt}/{retries}): {e}")
+            print("Telegram update sent successfully.")
+            return True
+
+        except requests.RequestException as error:
+            print(f"Telegram send failed on attempt {attempt}/{retries}: {error}")
 
         if attempt < retries:
             time.sleep(backoff_seconds)
 
-    print("Error: all retry attempts to send the Telegram message have failed.")
+    print("Error: all Telegram send attempts failed.")
+    return False
+
+
+def main():
+    data = fetch_etf_data()
+    chart_path = generate_chart(data)
+    message = build_message(data)
+    send_to_telegram(chart_path, message)
 
 
 if __name__ == "__main__":
-    data = get_etf_data()
-    path = generate_chart(data)
-    message = build_message(data)
-    send_to_telegram(path, message)
+    main()
