@@ -1,6 +1,6 @@
 # 🤖 Cloud-Native Dual-MA Trend Filter & Automated Quant Pipeline
 
-[![Live Quant Bot](https://github.com/asuki11/quant_trade_bot/actions/workflows/run_bot.yml/badge.svg)](https://github.com/asuki11/quant_trade_bot/actions)
+[![Live Quant Bot](https://github.com/kzyxx11/quant_trade_bot/actions/workflows/run_bot.yml/badge.svg)](https://github.com/asuki11/quant_trade_bot/actions)
 [![Language](https://img.shields.io/badge/language-Python%20%7C%20PineScript%20v5-blue.svg)](https://github.com/asuki11/quant_trade_bot)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
 
@@ -40,4 +40,4 @@ Serverless Automation: Fully hosted on GitHub Actions infrastructure; zero hosti
 Optimized UI (Pine Script): Frontend dashboard binds exclusively to barstate.islast to prevent historical rendering lag on TradingView charts.
 
 📬 Contact
-Developed by asuki11. Open for quantitative development, customized Pine Script indicators, and automated data pipelines.
+Developed by Eric Khoo. Open for quantitative development, customized Pine Script indicators, and automated data pipelines.
