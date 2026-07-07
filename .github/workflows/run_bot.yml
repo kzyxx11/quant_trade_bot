@@ -30,4 +30,5 @@ jobs:
         env:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        working-directory: ./quant_trade
         run: python track_etf.py
