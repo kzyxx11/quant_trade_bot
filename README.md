@@ -62,13 +62,13 @@ tradingview/etf_trend_filter.ps - TradingView Pine Script dashboard
 · ETF-aware display: Each ETF can define its own display name, quote currency, and currency symbol.
 · Chart-first alerts: Telegram receives both a visual trend chart and a structured strategy summary.
 
-GitHub Secrets
+🔒 GitHub Secrets
 Create the following repository secrets before running the workflow:
 
 TG_BOT_TOKEN
 TG_CHAT_ID
 
-Schedule
+⏰ Schedule
 The workflow runs daily at 22:30 UTC, which is 06:30 in Kuala Lumpur. This is designed to run after the US market close.
 
 📬 Author
