@@ -4,7 +4,6 @@ import time
 from pathlib import Path
 
 import matplotlib.pyplot as plt
-import pandas as pd
 import requests
 import yfinance as yf
 
@@ -16,6 +15,7 @@ MIN_ROWS_REQUIRED = 200
 CHART_LOOKBACK_ROWS = 252
 OUTPUT_DIR = Path("outputs")
 CHART_PATH = OUTPUT_DIR / "etf_trend.png"
+TELEGRAM_CAPTION_LIMIT = 1024
 
 
 ETFS = {
@@ -77,31 +77,31 @@ def fetch_etf_data():
 def classify_trend(close_price, ma50, ma200):
     if close_price <= ma200:
         return {
-            "label": "Risk Zone",
-            "headline": "Price is below the long-term trend line.",
+            "emoji": "🚨",
+            "label": "Risk Warning",
+            "headline": "Price has broken below the long-term trend line.",
             "detail": (
-                "The ETF is trading below MA200, which suggests weaker market "
-                "structure. Consider a more defensive allocation or smaller staged entries."
+                "Market structure is weaker. Consider staying defensive and avoid "
+                "committing all capital at once."
             ),
         }
 
     if close_price < ma50:
         return {
+            "emoji": "🟡",
             "label": "Pullback Buy Zone",
-            "headline": "Price is below MA50 but still above MA200.",
+            "headline": "Price is below MA50 but still holding above MA200.",
             "detail": (
-                "The ETF is in a medium-term pullback while the long-term trend "
-                "remains intact. This can be monitored as a potential accumulation zone."
+                "The long-term trend remains intact. This is a potential accumulation "
+                "zone for staged buying."
             ),
         }
 
     return {
-        "label": "Bullish Trend",
-        "headline": "Price is above the medium-term trend line.",
-        "detail": (
-            "The ETF is trading above MA50 and MA200, which indicates healthy "
-            "upward momentum."
-        ),
+        "emoji": "✅",
+        "label": "Healthy Uptrend",
+        "headline": "Price is trading above both moving averages.",
+        "detail": "The trend remains strong. Continue with the regular investment plan.",
     }
 
 
@@ -168,12 +168,12 @@ def generate_chart(data):
 def build_message(data):
     if not data:
         return (
-            "<b>ETF Trend Monitor</b>\n\n"
+            "⚠️ <b>ETF Trend Monitor</b>\n\n"
             "No valid ETF data was retrieved in this run. Please check Yahoo Finance "
             "availability or try again later."
         )
 
-    message_parts = ["<b>ETF Dual Moving Average Trend Monitor</b>\n"]
+    message_parts = ["📊 <b>ETF Dual Moving Average Trend Monitor</b>"]
 
     for ticker, info in data.items():
         df = info["df"]
@@ -192,11 +192,12 @@ def build_message(data):
             "\n".join(
                 [
                     f"<b>{name}</b>",
-                    f"<b>{html.escape(trend['label'])}</b>: {html.escape(trend['headline'])}",
+                    f"{trend['emoji']} <b>{html.escape(trend['label'])}</b>",
+                    html.escape(trend["headline"]),
                     html.escape(trend["detail"]),
-                    f"Latest close: {symbol}{close_price:.2f} ({currency})",
-                    f"MA50: {symbol}{ma50:.2f} | Deviation: {dev50:+.1f}%",
-                    f"MA200: {symbol}{ma200:.2f} | Deviation: {dev200:+.1f}%",
+                    f"• Latest close: {symbol}{close_price:.2f} ({currency})",
+                    f"• MA50: {symbol}{ma50:.2f} ({dev50:+.1f}%)",
+                    f"• MA200: {symbol}{ma200:.2f} ({dev200:+.1f}%)",
                 ]
             )
         )
@@ -246,14 +247,20 @@ def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
         try:
             if chart_path and Path(chart_path).exists():
                 with Path(chart_path).open("rb") as photo:
+                    caption = text_message if len(text_message) <= TELEGRAM_CAPTION_LIMIT else "📊 ETF trend update"
                     post_telegram_request(
                         photo_url,
                         {
                             "chat_id": CHAT_ID,
-                            "caption": "ETF trend chart",
+                            "caption": caption,
+                            "parse_mode": "HTML",
                         },
                         files={"photo": photo},
                     )
+
+                if len(text_message) <= TELEGRAM_CAPTION_LIMIT:
+                    print("Telegram chart and caption sent successfully.")
+                    return True
 
             for message_part in split_telegram_message(text_message):
                 post_telegram_request(
