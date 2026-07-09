@@ -51,16 +51,25 @@ def fetch_etf_data():
         if len(df) < MIN_ROWS_REQUIRED:
             print(
                 f"Warning: {ticker} has only {len(df)} valid rows; "
-                f"{MIN_ROWS_REQUIRED} rows are required for MA200."
+                f"{MIN_ROWS_REQUIRED} rows are required for calculations."
             )
             continue
 
+        # Calculate Technical Vectors
         df["MA50"] = df["Close"].rolling(window=50).mean()
         df["MA200"] = df["Close"].rolling(window=200).mean()
-        df = df.dropna(subset=["MA50", "MA200"])
+        
+        # Native High-Precision RSI (14) Engine
+        delta = df["Close"].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / (loss + 1e-10)
+        df["RSI"] = 100 - (100 / (1 + rs))
+
+        df = df.dropna(subset=["MA50", "MA200", "RSI"])
 
         if df.empty:
-            print(f"Warning: moving averages could not be calculated for {ticker}.")
+            print(f"Warning: technical attributes could not be computed for {ticker}.")
             continue
 
         data[ticker] = {
@@ -73,35 +82,36 @@ def fetch_etf_data():
     return data
 
 
-def classify_trend(close_price, ma50, ma200):
+def classify_trend(close_price, ma50, ma200, rsi):
+    # Base Trend Structure
     if close_price <= ma200:
-        return {
+        trend_status = {
             "emoji": "🚨",
             "label": "Risk Warning",
-            "headline": "Price has broken below the long-term trend line.",
-            "detail": (
-                "Market structure is weaker. Consider staying defensive and avoid "
-                "committing all capital at once."
-            ),
+            "headline": "Price has broken below the long-term structural trend line.",
         }
-
-    if close_price < ma50:
-        return {
+    elif close_price < ma50:
+        trend_status = {
             "emoji": "🟡",
             "label": "Pullback Buy Zone",
-            "headline": "Price is below MA50 but still holding above MA200.",
-            "detail": (
-                "The long-term trend remains intact. This is a potential accumulation "
-                "zone for staged buying."
-            ),
+            "headline": "Price is below MA50 but securely holding above MA200.",
+        }
+    else:
+        trend_status = {
+            "emoji": "✅",
+            "label": "Healthy Uptrend",
+            "headline": "Price is trading smoothly above both moving averages.",
         }
 
-    return {
-        "emoji": "✅",
-        "label": "Healthy Uptrend",
-        "headline": "Price is trading above both moving averages.",
-        "detail": "The trend remains strong. Continue with the regular investment plan.",
-    }
+    # Contextual Overlay of RSI Overbought/Oversold Signals
+    if rsi >= 70:
+        trend_status["detail"] = f"⚠️ [OVERBOUGHT ALERT] RSI (14) has scaled to {rsi:.1f}. Momentum is overextended; chasing entries carries elevated short-term risk."
+    elif rsi <= 30:
+        trend_status["detail"] = f"🔥 [OVERSOLD ALERT] RSI (14) has collapsed to {rsi:.1f}. Extreme fear detected; structurally this represents a high-probability entry zone."
+    else:
+        trend_status["detail"] = f"RSI (14) is stable at {rsi:.1f}. Market momentum remains balanced within the current trend structure."
+
+    return trend_status
 
 
 def generate_chart(data):
@@ -109,88 +119,110 @@ def generate_chart(data):
         print("No valid ETF data available. Skipping chart generation.")
         return None
 
-    print("Generating Institutional Dark-Themed Trend Chart...")
+    print("Generating Multi-Pane Institutional Analytics Canvas...")
     OUTPUT_DIR.mkdir(exist_ok=True)
 
-    # 1. Initialize Global Dark Canvas Config
     plt.style.use('dark_background')
     tickers = list(data.keys())
     
+    # Dual-pane architecture per ticker: Price Main Plot (Ratio 3.5) + RSI Oscillator Plot (Ratio 1.0)
     fig, axes = plt.subplots(
-        len(tickers),
+        len(tickers) * 2,
         1,
-        figsize=(12, 6.0 * len(tickers)),  # Expanded height for better spacing
-        sharex=False,
+        figsize=(12, 5.0 * len(tickers) * 2),
+        gridspec_kw={'height_ratios': [3.5, 1.0] * len(tickers)},
         constrained_layout=True,
     )
 
-    if len(tickers) == 1:
-        axes = [axes]
+    if len(tickers) * 2 == 2:
+        axes = [axes[0], axes[1]]
 
-    for index, ticker in enumerate(tickers):
-        ax = axes[index]
+    for idx, ticker in enumerate(tickers):
+        # Map specific row locations for Main Plot and RSI Subplot
+        main_ax = axes[idx * 2]
+        rsi_ax = axes[idx * 2 + 1]
+        
         info = data[ticker]
         df = info["df"]
 
-        # 2. Plot Time-Series Vectors with Premium Glow Palette
-        ax.plot(df.index, df["Close"], color="#ffffff", linewidth=1.5, label="Spot Price", alpha=0.9)
-        ax.plot(df.index, df["MA50"], color="#ffb703", linestyle="--", linewidth=1.2, label="MA50 (Mid-term)")
-        ax.plot(df.index, df["MA200"], color="#219ebc", linewidth=1.5, label="MA200 (Structural)")
+        latest_close = df["Close"].iloc[-1]
+        latest_ma50 = df["MA50"].iloc[-1]
+        latest_ma200 = df["MA200"].iloc[-1]
+        latest_rsi = df["RSI"].iloc[-1]
+        dev200 = ((latest_close - latest_ma200) / latest_ma200) * 100
+        trend = classify_trend(latest_close, latest_ma50, latest_ma200, latest_rsi)
 
-        # 3. Dynamic Structural Quadrant Fill (The Gold Accumulation Light)
-        # Shading when price is below MA50 but securely above MA200
-        ax.fill_between(
+        # ------------------ Pane 1: Price Structure Canvas ------------------
+        main_ax.plot(df.index, df["Close"], color="#ffffff", linewidth=1.5, label="Spot Price", alpha=0.9)
+        main_ax.plot(df.index, df["MA50"], color="#ffb703", linestyle="--", linewidth=1.2, label="MA50 (Mid-term)")
+        main_ax.plot(df.index, df["MA200"], color="#219ebc", linewidth=1.5, label="MA200 (Structural)")
+
+        # Golden Accumulation Zone Fill
+        main_ax.fill_between(
             df.index, df["MA50"], df["MA200"],
             where=(df["Close"] > df["MA200"]) & (df["Close"] < df["MA50"]),
             color="#ffb703", alpha=0.08, label="Golden Accumulation Zone"
         )
 
-        # 4. Extract Key Metadata Metrics
-        latest_close = df["Close"].iloc[-1]
-        latest_ma50 = df["MA50"].iloc[-1]
-        latest_ma200 = df["MA200"].iloc[-1]
-        dev200 = ((latest_close - latest_ma200) / latest_ma200) * 100
-        trend = classify_trend(latest_close, latest_ma50, latest_ma200)
-
-        # 5. Advanced Layout Geometry & Clean Grid Alignment
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.spines['left'].set_color('#444444')
-        ax.spines['bottom'].set_color('#444444')
-        ax.grid(True, linestyle=":", alpha=0.2, color='#888888')
-
-        # 6. Typography Orchestration
-        ax.set_title(
+        # Main Geometry & Typography Styling
+        main_ax.spines['top'].set_visible(False)
+        main_ax.spines['right'].set_visible(False)
+        main_ax.spines['left'].set_color('#444444')
+        main_ax.spines['bottom'].set_color('#444444')
+        main_ax.grid(True, linestyle=":", alpha=0.15, color='#888888')
+        main_ax.set_title(
             f"FINANCIAL TREND VECTOR: {ticker.upper()} ({trend['label'].upper()})", 
-            fontsize=12, fontweight="bold", pad=15, loc="left", color="#ffffff"
+            fontsize=12, fontweight="bold", pad=12, loc="left", color="#ffffff"
         )
-        ax.set_ylabel(f"Price ({info['currency']})", color="#888888", fontsize=10)
+        main_ax.set_ylabel(f"Price ({info['currency']})", color="#888888", fontsize=9)
         
-        # Inject custom-crafted floating info display matrix onto top right corner
+        # Upper Right Micro Analytics Matrix Box
         status_text = (
             f"Live Spot  : {info['symbol']}{latest_close:.2f}\n"
             f"MA50 Nodes : {info['symbol']}{latest_ma50:.2f}\n"
             f"MA200 Nodes: {info['symbol']}{latest_ma200:.2f}\n"
             f"Deviation  : {dev200:+.1f}%"
         )
-        ax.text(
-            0.98, 0.95, status_text,
-            transform=ax.transAxes, fontsize=9, fontfamily='monospace',
+        main_ax.text(
+            0.98, 0.93, status_text,
+            transform=main_ax.transAxes, fontsize=8.5, fontfamily='monospace',
             verticalalignment='top', horizontalalignment='right',
-            bbox=dict(boxstyle='round,pad=0.6', facecolor='#1e1e1e', edgecolor='#333333', alpha=0.8)
+            bbox=dict(boxstyle='round,pad=0.5', facecolor='#1e1e1e', edgecolor='#333333', alpha=0.8)
         )
+        main_ax.tick_params(axis='both', colors='#888888', labelsize=8.5)
+        main_ax.legend(loc="lower left", frameon=True, facecolor='#121212', edgecolor='#222222', fontsize=8.5)
 
-        # Formatting timeline axes gracefully
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-        ax.tick_params(axis='both', colors='#888888', labelsize=9)
-        ax.legend(loc="lower left", frameon=True, facecolor='#121212', edgecolor='#222222', fontsize=9)
+        # ------------------ Pane 2: RSI Relative Strength Subplot ------------------
+        rsi_ax.plot(df.index, df["RSI"], color="#8338ec", linewidth=1.2, label="RSI (14)", alpha=0.85)
+        
+        # Horizontal Threshold Guides
+        rsi_ax.axhline(70, color="#d90429", linestyle=":", linewidth=1.0, alpha=0.6)
+        rsi_ax.axhline(30, color="#00b4d8", linestyle=":", linewidth=1.0, alpha=0.6)
+        
+        # Overbought / Oversold Dynamic Background Shading
+        rsi_ax.fill_between(df.index, df["RSI"], 70, where=(df["RSI"] >= 70), color="#d90429", alpha=0.15)
+        rsi_ax.fill_between(df.index, df["RSI"], 30, where=(df["RSI"] <= 30), color="#00b4d8", alpha=0.15)
+        
+        # RSI Grid Layout Configuration
+        rsi_ax.spines['top'].set_visible(False)
+        rsi_ax.spines['right'].set_visible(False)
+        rsi_ax.spines['left'].set_color('#444444')
+        rsi_ax.spines['bottom'].set_color('#444444')
+        rsi_ax.set_ylim(15, 85)
+        rsi_ax.set_yticks([30, 50, 70])
+        rsi_ax.grid(True, linestyle=":", alpha=0.1, color='#888888')
+        rsi_ax.set_ylabel("RSI (14)", color="#888888", fontsize=9)
+        rsi_ax.tick_params(axis='both', colors='#888888', labelsize=8)
+        
+        # Ensure correct date formatting across timelines
+        main_ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+        rsi_ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
 
-    # Global canvas override adjustments
-    fig.suptitle("ETF DUAL MOVING AVERAGE TREND MONITOR", fontsize=14, weight="bold", color="#ffffff")
-    fig.savefig(CHART_PATH, dpi=300, facecolor='#0d1117', edgecolor='none') # High-density render
+    fig.suptitle("INSTITUTIONAL QUANTITATIVE ASSET MULTI-PANE MONITOR", fontsize=13, weight="bold", color="#ffffff")
+    fig.savefig(CHART_PATH, dpi=300, facecolor='#0d1117', edgecolor='none')
     plt.close(fig)
 
-    print(f"[Success] Dark institutional asset canvas exported directly to {CHART_PATH}")
+    print(f"[Success] Expanded asset architecture with RSI subplot exported to {CHART_PATH}")
     return CHART_PATH
 
 
@@ -198,20 +230,21 @@ def build_message(data):
     if not data:
         return (
             "⚠️ <b>ETF Trend Monitor</b>\n\n"
-            "No valid ETF data was retrieved in this run. Please check Yahoo Finance "
-            "availability or try again later."
+            "No valid ETF data was retrieved in this run."
         )
 
-    message_parts = ["📊 <b>ETF Dual Moving Average Trend Monitor</b>"]
+    message_parts = ["📊 <b>ETF Dual Moving Average & Momentum Monitor</b>"]
 
     for ticker, info in data.items():
         df = info["df"]
         close_price = df["Close"].iloc[-1]
         ma50 = df["MA50"].iloc[-1]
         ma200 = df["MA200"].iloc[-1]
+        rsi = df["RSI"].iloc[-1]
+        
         dev50 = ((close_price - ma50) / ma50) * 100
         dev200 = ((close_price - ma200) / ma200) * 100
-        trend = classify_trend(close_price, ma50, ma200)
+        trend = classify_trend(close_price, ma50, ma200, rsi)
 
         name = html.escape(info["name"])
         symbol = info["symbol"]
@@ -223,7 +256,7 @@ def build_message(data):
                     f"<b>{name}</b>",
                     f"{trend['emoji']} <b>{html.escape(trend['label'])}</b>",
                     html.escape(trend["headline"]),
-                    html.escape(trend["detail"]),
+                    f"<i>{html.escape(trend['detail'])}</i>",
                     f"• Latest close: {symbol}{close_price:.2f} ({currency})",
                     f"• MA50: {symbol}{ma50:.2f} ({dev50:+.1f}%)",
                     f"• MA200: {symbol}{ma200:.2f} ({dev200:+.1f}%)",
