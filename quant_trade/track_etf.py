@@ -3,10 +3,10 @@ import os
 import time
 from pathlib import Path
 
+import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import requests
 import yfinance as yf
-
 
 TELEGRAM_TOKEN = os.getenv("TG_BOT_TOKEN")
 CHAT_ID = os.getenv("TG_CHAT_ID")
@@ -16,7 +16,6 @@ CHART_LOOKBACK_ROWS = 252
 OUTPUT_DIR = Path("outputs")
 CHART_PATH = OUTPUT_DIR / "etf_trend.png"
 TELEGRAM_CAPTION_LIMIT = 1024
-
 
 ETFS = {
     "CSPX.L": {
@@ -110,14 +109,17 @@ def generate_chart(data):
         print("No valid ETF data available. Skipping chart generation.")
         return None
 
-    print("Generating MA50/MA200 trend chart...")
+    print("Generating Institutional Dark-Themed Trend Chart...")
     OUTPUT_DIR.mkdir(exist_ok=True)
 
+    # 1. Initialize Global Dark Canvas Config
+    plt.style.use('dark_background')
     tickers = list(data.keys())
+    
     fig, axes = plt.subplots(
         len(tickers),
         1,
-        figsize=(12, 4.5 * len(tickers)),
+        figsize=(12, 6.0 * len(tickers)),  # Expanded height for better spacing
         sharex=False,
         constrained_layout=True,
     )
@@ -125,43 +127,70 @@ def generate_chart(data):
     if len(tickers) == 1:
         axes = [axes]
 
-    price_colors = ["#1E6091", "#D90429", "#6A4C93", "#2A9D8F"]
-
     for index, ticker in enumerate(tickers):
         ax = axes[index]
         info = data[ticker]
         df = info["df"]
-        price_color = price_colors[index % len(price_colors)]
 
-        ax.plot(df.index, df["Close"], color=price_color, linewidth=2, label="Close")
-        ax.plot(df.index, df["MA50"], color="#2A9D8F", linestyle="--", linewidth=1.7, label="MA50")
-        ax.plot(df.index, df["MA200"], color="#C1121F", linewidth=1.9, label="MA200")
-        ax.fill_between(df.index, df["Close"], color=price_color, alpha=0.06)
+        # 2. Plot Time-Series Vectors with Premium Glow Palette
+        ax.plot(df.index, df["Close"], color="#ffffff", linewidth=1.5, label="Spot Price", alpha=0.9)
+        ax.plot(df.index, df["MA50"], color="#ffb703", linestyle="--", linewidth=1.2, label="MA50 (Mid-term)")
+        ax.plot(df.index, df["MA200"], color="#219ebc", linewidth=1.5, label="MA200 (Structural)")
 
+        # 3. Dynamic Structural Quadrant Fill (The Gold Accumulation Light)
+        # Shading when price is below MA50 but securely above MA200
+        ax.fill_between(
+            df.index, df["MA50"], df["MA200"],
+            where=(df["Close"] > df["MA200"]) & (df["Close"] < df["MA50"]),
+            color="#ffb703", alpha=0.08, label="Golden Accumulation Zone"
+        )
+
+        # 4. Extract Key Metadata Metrics
         latest_close = df["Close"].iloc[-1]
         latest_ma50 = df["MA50"].iloc[-1]
         latest_ma200 = df["MA200"].iloc[-1]
+        dev200 = ((latest_close - latest_ma200) / latest_ma200) * 100
         trend = classify_trend(latest_close, latest_ma50, latest_ma200)
 
-        ax.set_title(f"{info['name']} - {trend['label']}", fontsize=12, loc="left", weight="bold")
-        ax.set_ylabel(f"Price ({info['currency']})")
-        ax.grid(True, linestyle=":", alpha=0.55)
-        ax.legend(loc="upper left")
-        ax.annotate(
-            f"{info['symbol']}{latest_close:.2f}",
-            xy=(df.index[-1], latest_close),
-            xytext=(8, 0),
-            textcoords="offset points",
-            color=price_color,
-            weight="bold",
-            va="center",
+        # 5. Advanced Layout Geometry & Clean Grid Alignment
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_color('#444444')
+        ax.spines['bottom'].set_color('#444444')
+        ax.grid(True, linestyle=":", alpha=0.2, color='#888888')
+
+        # 6. Typography Orchestration
+        ax.set_title(
+            f"FINANCIAL TREND VECTOR: {ticker.upper()} ({trend['label'].upper()})", 
+            fontsize=12, fontweight="bold", pad=15, loc="left", color="#ffffff"
+        )
+        ax.set_ylabel(f"Price ({info['currency']})", color="#888888", fontsize=10)
+        
+        # Inject custom-crafted floating info display matrix onto top right corner
+        status_text = (
+            f"Live Spot  : {info['symbol']}{latest_close:.2f}\n"
+            f"MA50 Nodes : {info['symbol']}{latest_ma50:.2f}\n"
+            f"MA200 Nodes: {info['symbol']}{latest_ma200:.2f}\n"
+            f"Deviation  : {dev200:+.1f}%"
+        )
+        ax.text(
+            0.98, 0.95, status_text,
+            transform=ax.transAxes, fontsize=9, fontfamily='monospace',
+            verticalalignment='top', horizontalalignment='right',
+            bbox=dict(boxstyle='round,pad=0.6', facecolor='#1e1e1e', edgecolor='#333333', alpha=0.8)
         )
 
-    axes[-1].set_xlabel("Date")
-    fig.suptitle("ETF Dual Moving Average Trend Monitor", fontsize=15, weight="bold")
-    fig.savefig(CHART_PATH, dpi=160, bbox_inches="tight")
+        # Formatting timeline axes gracefully
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
+        ax.tick_params(axis='both', colors='#888888', labelsize=9)
+        ax.legend(loc="lower left", frameon=True, facecolor='#121212', edgecolor='#222222', fontsize=9)
+
+    # Global canvas override adjustments
+    fig.suptitle("ETF DUAL MOVING AVERAGE TREND MONITOR", fontsize=14, weight="bold", color="#ffffff")
+    fig.savefig(CHART_PATH, dpi=300, facecolor='#0d1117', edgecolor='none') # High-density render
     plt.close(fig)
 
+    print(f"[Success] Dark institutional asset canvas exported directly to {CHART_PATH}")
     return CHART_PATH
 
 
