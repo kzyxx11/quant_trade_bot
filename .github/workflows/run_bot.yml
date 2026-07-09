@@ -29,4 +29,4 @@ jobs:
         env:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-        run: python track_etf.py
+        run: python quant_trade/track_etf.py
