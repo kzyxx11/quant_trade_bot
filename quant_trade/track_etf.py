@@ -316,7 +316,9 @@ def build_message(data):
 
         trend_score = calculate_trend_score(close_price, ma50, ma200)
         momentum_score = calculate_momentum_score(df["RSI"])
-        trend_text, momentum_text = explain_scores(trend_score, momentum_score)
+        market_state = get_market_state(close_price, ma50, ma200)
+        trend_text = market_state["trend_text"]
+        momentum_text = explain_scores(momentum_score)
 
         name = html.escape(info["name"])
         symbol = info["symbol"]
