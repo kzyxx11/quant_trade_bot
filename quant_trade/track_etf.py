@@ -89,7 +89,6 @@ def calculate_trend_score(close_price, ma50, ma200):
     """
     score = 50  # neutral baseline
 
-    # Core structural check: price vs MA200 (long-term trend)
     if close_price > ma200:
         score += 20
         dist200 = ((close_price - ma200) / ma200) * 100
@@ -99,13 +98,11 @@ def calculate_trend_score(close_price, ma50, ma200):
         dist200 = ((ma200 - close_price) / ma200) * 100
         score -= min(dist200 * 1.5, 15)
 
-    # Mid-term check: price vs MA50
     if close_price > ma50:
         score += 10
     else:
         score -= 10
 
-    # Structural alignment: MA50 vs MA200 (golden/death cross state)
     if ma50 > ma200:
         score += 5
     else:
@@ -117,7 +114,6 @@ def calculate_trend_score(close_price, ma50, ma200):
 def calculate_momentum_score(rsi_series):
     """
     Momentum Score (0-100): Measures short-term momentum strength and direction.
-    Combines current RSI level with its recent trajectory (rising/falling).
     """
     latest_rsi = rsi_series.iloc[-1]
     prev_rsi = rsi_series.iloc[-6] if len(rsi_series) >= 6 else rsi_series.iloc[0]
@@ -129,19 +125,44 @@ def calculate_momentum_score(rsi_series):
     return max(0, min(100, round(score)))
 
 
-def explain_scores(trend_score, momentum_score):
+def get_market_state(close_price, ma50, ma200):
     """
-    Generates plain-English reasoning for the composite scores.
+    Single source of truth for structural state, shared by both the chart title
+    and the message text to avoid contradictory labels.
     """
-    if trend_score >= 70:
-        trend_text = "Price structure is firmly bullish, trading well above both key moving averages."
-    elif trend_score >= 50:
-        trend_text = "Trend is constructive but not fully confirmed; price is holding above long-term support."
-    elif trend_score >= 30:
-        trend_text = "Trend is weakening; structure shows signs of stress near key averages."
-    else:
-        trend_text = "Trend is bearish; price has broken below major structural support."
+    above_ma50 = close_price > ma50
+    above_ma200 = close_price > ma200
 
+    if above_ma50 and above_ma200:
+        return {
+            "emoji": "✅",
+            "label": "Healthy Uptrend",
+            "trend_text": "Price is trading above both MA50 and MA200 — structurally bullish and confirmed.",
+        }
+    if above_ma200 and not above_ma50:
+        return {
+            "emoji": "🟡",
+            "label": "Pullback Buy Zone",
+            "trend_text": "Price has pulled back below MA50 but remains above MA200 — long-term trend intact, short-term cooling off.",
+        }
+    if not above_ma200 and above_ma50:
+        return {
+            "emoji": "🟠",
+            "label": "Unstable Structure",
+            "trend_text": "Price is above MA50 but still below MA200 — a fragile, unconfirmed recovery attempt.",
+        }
+    return {
+        "emoji": "🚨",
+        "label": "Risk Warning",
+        "trend_text": "Price is trading below both MA50 and MA200 — structurally bearish.",
+    }
+
+
+def explain_scores(momentum_score):
+    """
+    Momentum explanation only. Trend explanation now comes from get_market_state()
+    so it always matches the actual price-vs-MA relationship shown on the chart.
+    """
     if momentum_score >= 70:
         momentum_text = "Momentum is strong and accelerating — approaching overbought territory."
     elif momentum_score >= 50:
@@ -151,8 +172,7 @@ def explain_scores(trend_score, momentum_score):
     else:
         momentum_text = "Momentum is deeply negative — approaching oversold territory."
 
-    return trend_text, momentum_text
-
+    return momentum_text
 
 def classify_trend(close_price, ma50, ma200):
     """
