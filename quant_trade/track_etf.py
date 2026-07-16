@@ -58,7 +58,7 @@ def fetch_etf_data():
         # Calculate Technical Vectors
         df["MA50"] = df["Close"].rolling(window=50).mean()
         df["MA200"] = df["Close"].rolling(window=200).mean()
-        
+
         # Native High-Precision RSI (14) Engine
         delta = df["Close"].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
@@ -82,36 +82,96 @@ def fetch_etf_data():
     return data
 
 
-def classify_trend(close_price, ma50, ma200, rsi):
-    # Base Trend Structure
+def calculate_trend_score(close_price, ma50, ma200):
+    """
+    Trend Score (0-100): Measures structural trend health.
+    0-30: Bearish structure | 30-50: Weak/Transitional | 50-70: Constructive | 70-100: Strong uptrend
+    """
+    score = 50  # neutral baseline
+
+    # Core structural check: price vs MA200 (long-term trend)
+    if close_price > ma200:
+        score += 20
+        dist200 = ((close_price - ma200) / ma200) * 100
+        score += min(dist200 * 1.5, 15)
+    else:
+        score -= 20
+        dist200 = ((ma200 - close_price) / ma200) * 100
+        score -= min(dist200 * 1.5, 15)
+
+    # Mid-term check: price vs MA50
+    if close_price > ma50:
+        score += 10
+    else:
+        score -= 10
+
+    # Structural alignment: MA50 vs MA200 (golden/death cross state)
+    if ma50 > ma200:
+        score += 5
+    else:
+        score -= 5
+
+    return max(0, min(100, round(score)))
+
+
+def calculate_momentum_score(rsi_series):
+    """
+    Momentum Score (0-100): Measures short-term momentum strength and direction.
+    Combines current RSI level with its recent trajectory (rising/falling).
+    """
+    latest_rsi = rsi_series.iloc[-1]
+    prev_rsi = rsi_series.iloc[-6] if len(rsi_series) >= 6 else rsi_series.iloc[0]
+    rsi_change = latest_rsi - prev_rsi
+
+    score = latest_rsi
+    score += max(min(rsi_change * 0.8, 10), -10)
+
+    return max(0, min(100, round(score)))
+
+
+def explain_scores(trend_score, momentum_score):
+    """
+    Generates plain-English reasoning for the composite scores.
+    """
+    if trend_score >= 70:
+        trend_text = "Price structure is firmly bullish, trading well above both key moving averages."
+    elif trend_score >= 50:
+        trend_text = "Trend is constructive but not fully confirmed; price is holding above long-term support."
+    elif trend_score >= 30:
+        trend_text = "Trend is weakening; structure shows signs of stress near key averages."
+    else:
+        trend_text = "Trend is bearish; price has broken below major structural support."
+
+    if momentum_score >= 70:
+        momentum_text = "Momentum is strong and accelerating — approaching overbought territory."
+    elif momentum_score >= 50:
+        momentum_text = "Momentum is balanced, neither overextended nor weak."
+    elif momentum_score >= 30:
+        momentum_text = "Momentum is soft; buyers are losing short-term control."
+    else:
+        momentum_text = "Momentum is deeply negative — approaching oversold territory."
+
+    return trend_text, momentum_text
+
+
+def classify_trend(close_price, ma50, ma200):
+    """
+    Retained for chart-title classification (kept simple/legacy for visuals).
+    """
     if close_price <= ma200:
-        trend_status = {
+        return {
             "emoji": "🚨",
             "label": "Risk Warning",
-            "headline": "Price has broken below the long-term structural trend line.",
         }
-    elif close_price < ma50:
-        trend_status = {
+    if close_price < ma50:
+        return {
             "emoji": "🟡",
             "label": "Pullback Buy Zone",
-            "headline": "Price is below MA50 but securely holding above MA200.",
         }
-    else:
-        trend_status = {
-            "emoji": "✅",
-            "label": "Healthy Uptrend",
-            "headline": "Price is trading smoothly above both moving averages.",
-        }
-
-    # Contextual Overlay of RSI Overbought/Oversold Signals
-    if rsi >= 70:
-        trend_status["detail"] = f"⚠️ [OVERBOUGHT ALERT] RSI (14) has scaled to {rsi:.1f}. Momentum is overextended; chasing entries carries elevated short-term risk."
-    elif rsi <= 30:
-        trend_status["detail"] = f"🔥 [OVERSOLD ALERT] RSI (14) has collapsed to {rsi:.1f}. Extreme fear detected; structurally this represents a high-probability entry zone."
-    else:
-        trend_status["detail"] = f"RSI (14) is stable at {rsi:.1f}. Market momentum remains balanced within the current trend structure."
-
-    return trend_status
+    return {
+        "emoji": "✅",
+        "label": "Healthy Uptrend",
+    }
 
 
 def generate_chart(data):
@@ -124,8 +184,7 @@ def generate_chart(data):
 
     plt.style.use('dark_background')
     tickers = list(data.keys())
-    
-    # Dual-pane architecture per ticker: Price Main Plot (Ratio 3.5) + RSI Oscillator Plot (Ratio 1.0)
+
     fig, axes = plt.subplots(
         len(tickers) * 2,
         1,
@@ -138,10 +197,9 @@ def generate_chart(data):
         axes = [axes[0], axes[1]]
 
     for idx, ticker in enumerate(tickers):
-        # Map specific row locations for Main Plot and RSI Subplot
         main_ax = axes[idx * 2]
         rsi_ax = axes[idx * 2 + 1]
-        
+
         info = data[ticker]
         df = info["df"]
 
@@ -150,33 +208,30 @@ def generate_chart(data):
         latest_ma200 = df["MA200"].iloc[-1]
         latest_rsi = df["RSI"].iloc[-1]
         dev200 = ((latest_close - latest_ma200) / latest_ma200) * 100
-        trend = classify_trend(latest_close, latest_ma50, latest_ma200, latest_rsi)
+        trend = classify_trend(latest_close, latest_ma50, latest_ma200)
 
         # ------------------ Pane 1: Price Structure Canvas ------------------
         main_ax.plot(df.index, df["Close"], color="#ffffff", linewidth=1.5, label="Spot Price", alpha=0.9)
         main_ax.plot(df.index, df["MA50"], color="#ffb703", linestyle="--", linewidth=1.2, label="MA50 (Mid-term)")
         main_ax.plot(df.index, df["MA200"], color="#219ebc", linewidth=1.5, label="MA200 (Structural)")
 
-        # Golden Accumulation Zone Fill
         main_ax.fill_between(
             df.index, df["MA50"], df["MA200"],
             where=(df["Close"] > df["MA200"]) & (df["Close"] < df["MA50"]),
             color="#ffb703", alpha=0.08, label="Golden Accumulation Zone"
         )
 
-        # Main Geometry & Typography Styling
         main_ax.spines['top'].set_visible(False)
         main_ax.spines['right'].set_visible(False)
         main_ax.spines['left'].set_color('#444444')
         main_ax.spines['bottom'].set_color('#444444')
         main_ax.grid(True, linestyle=":", alpha=0.15, color='#888888')
         main_ax.set_title(
-            f"FINANCIAL TREND VECTOR: {ticker.upper()} ({trend['label'].upper()})", 
+            f"FINANCIAL TREND VECTOR: {ticker.upper()} ({trend['label'].upper()})",
             fontsize=12, fontweight="bold", pad=12, loc="left", color="#ffffff"
         )
         main_ax.set_ylabel(f"Price ({info['currency']})", color="#888888", fontsize=9)
-        
-        # Upper Right Micro Analytics Matrix Box
+
         status_text = (
             f"Live Spot  : {info['symbol']}{latest_close:.2f}\n"
             f"MA50 Nodes : {info['symbol']}{latest_ma50:.2f}\n"
@@ -194,16 +249,11 @@ def generate_chart(data):
 
         # ------------------ Pane 2: RSI Relative Strength Subplot ------------------
         rsi_ax.plot(df.index, df["RSI"], color="#8338ec", linewidth=1.2, label="RSI (14)", alpha=0.85)
-        
-        # Horizontal Threshold Guides
         rsi_ax.axhline(70, color="#d90429", linestyle=":", linewidth=1.0, alpha=0.6)
         rsi_ax.axhline(30, color="#00b4d8", linestyle=":", linewidth=1.0, alpha=0.6)
-        
-        # Overbought / Oversold Dynamic Background Shading
         rsi_ax.fill_between(df.index, df["RSI"], 70, where=(df["RSI"] >= 70), color="#d90429", alpha=0.15)
         rsi_ax.fill_between(df.index, df["RSI"], 30, where=(df["RSI"] <= 30), color="#00b4d8", alpha=0.15)
-        
-        # RSI Grid Layout Configuration
+
         rsi_ax.spines['top'].set_visible(False)
         rsi_ax.spines['right'].set_visible(False)
         rsi_ax.spines['left'].set_color('#444444')
@@ -213,8 +263,7 @@ def generate_chart(data):
         rsi_ax.grid(True, linestyle=":", alpha=0.1, color='#888888')
         rsi_ax.set_ylabel("RSI (14)", color="#888888", fontsize=9)
         rsi_ax.tick_params(axis='both', colors='#888888', labelsize=8)
-        
-        # Ensure correct date formatting across timelines
+
         main_ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
         rsi_ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
 
@@ -233,7 +282,7 @@ def build_message(data):
             "No valid ETF data was retrieved in this run."
         )
 
-    message_parts = ["📊 <b>ETF Dual Moving Average & Momentum Monitor</b>"]
+    message_parts = ["📊 <b>ETF Trend &amp; Momentum Monitor</b>"]
 
     for ticker, info in data.items():
         df = info["df"]
@@ -241,10 +290,13 @@ def build_message(data):
         ma50 = df["MA50"].iloc[-1]
         ma200 = df["MA200"].iloc[-1]
         rsi = df["RSI"].iloc[-1]
-        
+
         dev50 = ((close_price - ma50) / ma50) * 100
         dev200 = ((close_price - ma200) / ma200) * 100
-        trend = classify_trend(close_price, ma50, ma200, rsi)
+
+        trend_score = calculate_trend_score(close_price, ma50, ma200)
+        momentum_score = calculate_momentum_score(df["RSI"])
+        trend_text, momentum_text = explain_scores(trend_score, momentum_score)
 
         name = html.escape(info["name"])
         symbol = info["symbol"]
@@ -254,12 +306,17 @@ def build_message(data):
             "\n".join(
                 [
                     f"<b>{name}</b>",
-                    f"{trend['emoji']} <b>{html.escape(trend['label'])}</b>",
-                    html.escape(trend["headline"]),
-                    f"<i>{html.escape(trend['detail'])}</i>",
+                    "",
+                    f"📈 <b>Trend Score: {trend_score}/100</b>",
+                    html.escape(trend_text),
+                    "",
+                    f"⚡ <b>Momentum Score: {momentum_score}/100</b>",
+                    html.escape(momentum_text),
+                    "",
                     f"• Latest close: {symbol}{close_price:.2f} ({currency})",
                     f"• MA50: {symbol}{ma50:.2f} ({dev50:+.1f}%)",
                     f"• MA200: {symbol}{ma200:.2f} ({dev200:+.1f}%)",
+                    f"• RSI (14): {rsi:.1f}",
                 ]
             )
         )
