@@ -498,11 +498,15 @@ def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
         print("Error: TG_BOT_TOKEN and TG_CHAT_ID must be configured as repository secrets.")
         return False
 
-    # Get the public channel ID (skip if not configured)
+    # 获取公开频道 ID
     public_channel_id = os.getenv("PUBLIC_CHANNEL_ID")
-    targets = [CHAT_ID]  # always send to yourself
+    targets = [CHAT_ID]  # 总是发给你自己
     if public_channel_id:
         targets.append(public_channel_id)
+
+    # 🔍 调试输出：打印 targets 列表
+    print(f"[DEBUG] PUBLIC_CHANNEL_ID = '{public_channel_id}'")
+    print(f"[DEBUG] targets = {targets}")
 
     photo_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
     text_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -513,7 +517,7 @@ def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
         success = False
         for attempt in range(1, retries + 1):
             try:
-                # 1. Send chart (if exists)
+                # 发送图表
                 if chart_path and Path(chart_path).exists():
                     with Path(chart_path).open("rb") as photo:
                         caption = text_message if len(text_message) <= TELEGRAM_CAPTION_LIMIT else "📊 ETF trend update"
@@ -527,13 +531,12 @@ def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
                             files={"photo": photo},
                         )
 
-                    # If caption was short enough, we're done for this target
                     if len(text_message) <= TELEGRAM_CAPTION_LIMIT:
                         print(f"Telegram chart sent to {target_chat_id} successfully.")
                         success = True
                         break
 
-                # 2. Send text (if chart didn't cover it, or chart doesn't exist)
+                # 发送文字（如果图表没有覆盖全部文字）
                 for message_part in split_telegram_message(text_message):
                     post_telegram_request(
                         text_url,
