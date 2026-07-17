@@ -413,33 +413,28 @@ def build_message(data):
         trend_score = calculate_trend_score(close_price, ma50, ma200)
         momentum_score = calculate_momentum_score(df["RSI"])
 
-        # 在你现有代码中，计算完 trend_score 和 momentum_score 之后
-# 插入这段历史分析逻辑：
+        # 👇 这一整块缩进 4 个空格，和 trend_score 平级
+        historical = run_historical_analysis(
+            df=df,
+            current_trend_score=trend_score,
+            current_momentum_score=momentum_score
+        )
 
-historical = run_historical_analysis(
-    df=df,  # 这里直接传入当前这个 ticker 的完整历史 df
-    current_trend_score=trend_score,
-    current_momentum_score=momentum_score
-)
-
-# 组装历史统计的文本块
-hist_text = ""
-if "error" not in historical:
-    hist_text += f"\n📜 **Historical Match**: {historical['match_count']} occurrences\n"
-    for days, stats in historical['periods'].items():
-        if "error" not in stats:
-            hist_text += (
-                f"  • Next {days}d: Win {stats['win_rate']}% | "
-                f"Avg {stats['avg_return']:+.1f}% | "
-                f"MaxDD {stats['max_dd']:.1f}%\n"
-            )
+        hist_text = ""
+        if "error" not in historical:
+            hist_text += f"\n📜 **Historical Match**: {historical['match_count']} occurrences\n"
+            for days, stats in historical['periods'].items():
+                if "error" not in stats:
+                    hist_text += (
+                        f"  • Next {days}d: Win {stats['win_rate']}% | "
+                        f"Avg {stats['avg_return']:+.1f}% | "
+                        f"MaxDD {stats['max_dd']:.1f}%\n"
+                    )
+                else:
+                    hist_text += f"  • Next {days}d: {stats['error']}\n"
         else:
-            hist_text += f"  • Next {days}d: {stats['error']}\n"
-else:
-    hist_text = f"\n📜 **Historical Match**: {historical['error']}"
+            hist_text = f"\n📜 **Historical Match**: {historical['error']}"
 
-# 然后在拼装消息时，把 hist_text 放到 Trend Score 和 Momentum Score 的下面。
-        
         market_state = get_market_state(close_price, ma50, ma200)
         trend_text = market_state["trend_text"]
         momentum_text = explain_scores(momentum_score)
@@ -449,28 +444,24 @@ else:
         currency = html.escape(info["currency"])
 
         message_parts.append(
-    "\n".join(
-        [
-            f"<b>{name}</b>",
-            "",
-            f"📈 <b>Trend Score: {trend_score}/100</b>",
-            html.escape(trend_text),
-            "",
-            f"⚡ <b>Momentum Score: {momentum_score}/100</b>",
-            html.escape(momentum_text),
-            # 👇 这里插入历史统计文本
-            hist_text,
-            "",
-            f"• Latest close: {symbol}{close_price:.2f} ({currency})",
-            f"• MA50: {symbol}{ma50:.2f} ({dev50:+.1f}%)",
-            f"• MA200: {symbol}{ma200:.2f} ({dev200:+.1f}%)",
-            f"• RSI (14): {rsi:.1f}",
-        ]
-    )
-)
+            "\n".join([
+                f"<b>{name}</b>",
+                "",
+                f"📈 <b>Trend Score: {trend_score}/100</b>",
+                html.escape(trend_text),
+                "",
+                f"⚡ <b>Momentum Score: {momentum_score}/100</b>",
+                html.escape(momentum_text),
+                hist_text,
+                "",
+                f"• Latest close: {symbol}{close_price:.2f} ({currency})",
+                f"• MA50: {symbol}{ma50:.2f} ({dev50:+.1f}%)",
+                f"• MA200: {symbol}{ma200:.2f} ({dev200:+.1f}%)",
+                f"• RSI (14): {rsi:.1f}",
+            ])
+        )
 
     return "\n\n".join(message_parts)
-
 
 def post_telegram_request(url, payload, files=None):
     response = requests.post(url, data=payload, files=files, timeout=30)
