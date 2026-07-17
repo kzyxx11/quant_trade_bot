@@ -37,7 +37,7 @@ def fetch_etf_data():
 
     for ticker, meta in ETFS.items():
         try:
-            df = yf.Ticker(ticker).history(period="2y", auto_adjust=False)
+            df = yf.Ticker(ticker).history(period="15y", auto_adjust=False)
         except Exception as error:
             print(f"Warning: failed to fetch {ticker}: {error}")
             continue
@@ -124,6 +124,102 @@ def calculate_momentum_score(rsi_series):
 
     return max(0, min(100, round(score)))
 
+def run_historical_analysis(df, current_trend_score, current_momentum_score, 
+                             lookforward_days=[90, 180], tolerance=8):
+    """
+    扫描历史数据，找出所有与"当前趋势/动量结构相似"的日期，
+    统计这些日期之后 3 个月和 6 个月的涨跌表现。
+    
+    Parameters:
+        df: 包含 'Close', 'MA50', 'MA200', 'RSI' 列的完整历史 DataFrame
+        current_trend_score: 当前计算出的 Trend Score (0-100)
+        current_momentum_score: 当前计算出的 Momentum Score (0-100)
+        lookforward_days: 列表，例如 [90, 180]，表示统计未来 90 天和 180 天
+        tolerance: 分数容忍度，±8 分内都算"相似结构"
+    
+    Returns:
+        dict: 包含匹配次数、各周期的平均收益、上涨概率、最大回撤
+    """
+    # 确保数据有完整的列
+    df_copy = df.copy()
+    df_copy['MA50'] = df_copy['Close'].rolling(window=50).mean()
+    df_copy['MA200'] = df_copy['Close'].rolling(window=200).mean()
+    
+    # 计算历史 RSI（14天）
+    delta = df_copy['Close'].diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+    rs = gain / (loss + 1e-10)
+    df_copy['RSI'] = 100 - (100 / (1 + rs))
+    
+    # 去掉缺失值，防止干扰
+    df_clean = df_copy.dropna(subset=['Close', 'MA50', 'MA200', 'RSI']).copy()
+    if len(df_clean) < 500:
+        return {"error": "历史数据不足，需要至少 500 个交易日的数据。"}
+    
+    # 存储所有匹配日期的索引
+    match_dates = []
+    
+    # 循环扫描历史（从第 250 天开始，确保均线稳定）
+    for i in range(250, len(df_clean) - max(lookforward_days)):
+        row = df_clean.iloc[i]
+        close = row['Close']
+        ma50 = row['MA50']
+        ma200 = row['MA200']
+        rsi = row['RSI']
+        
+        # 计算该历史日期的分数（使用你现有的评分逻辑）
+        # 注意：calculate_trend_score 需要 3 个参数
+        trend_score = calculate_trend_score(close, ma50, ma200)
+        
+        # 计算动量分数需要 RSI 序列，但这里我们只有单个数值，用简易计算方式
+        # 为了简化，这里用 RSI 的当前值作为动量分数基准（你也可以写更复杂的逻辑）
+        # 但为了保持一致性，我们直接调用你现有的函数但传入临时 Series
+        # 简单起见：把当前 RSI 当成分数基准，再取最近 6 天的变化
+        if i >= 6:
+            prev_rsi = df_clean.iloc[i-6]['RSI'] if i-6 >=0 else rsi
+        else:
+            prev_rsi = rsi
+        rsi_change = rsi - prev_rsi
+        momentum_score = min(100, max(0, round(rsi + rsi_change * 0.8)))
+        
+        # 检查是否匹配当前结构（允许误差 ±tolerance）
+        if (abs(trend_score - current_trend_score) <= tolerance and 
+            abs(momentum_score - current_momentum_score) <= tolerance):
+            match_dates.append(i)
+    
+    if not match_dates:
+        return {"error": "未找到足够相似的历史结构。"}
+    
+    # 统计每个未来周期的表现
+    results = {}
+    for days in lookforward_days:
+        returns = []
+        for idx in match_dates:
+            start_price = df_clean.iloc[idx]['Close']
+            end_idx = min(idx + days, len(df_clean) - 1)
+            end_price = df_clean.iloc[end_idx]['Close']
+            ret = (end_price / start_price) - 1
+            returns.append(ret)
+        
+        if returns:
+            avg_ret = sum(returns) / len(returns) * 100
+            positive_count = sum(1 for r in returns if r > 0)
+            win_rate = positive_count / len(returns) * 100
+            max_drawdown = min(returns) * 100 if returns else 0
+            results[days] = {
+                "count": len(returns),
+                "avg_return": round(avg_ret, 1),
+                "win_rate": round(win_rate, 1),
+                "max_dd": round(max_drawdown, 1)
+            }
+        else:
+            results[days] = {"error": "无有效数据"}
+    
+    return {
+        "match_count": len(match_dates),
+        "periods": results
+    }
 
 def get_market_state(close_price, ma50, ma200):
     """
@@ -316,6 +412,34 @@ def build_message(data):
 
         trend_score = calculate_trend_score(close_price, ma50, ma200)
         momentum_score = calculate_momentum_score(df["RSI"])
+
+        # 在你现有代码中，计算完 trend_score 和 momentum_score 之后
+# 插入这段历史分析逻辑：
+
+historical = run_historical_analysis(
+    df=df,  # 这里直接传入当前这个 ticker 的完整历史 df
+    current_trend_score=trend_score,
+    current_momentum_score=momentum_score
+)
+
+# 组装历史统计的文本块
+hist_text = ""
+if "error" not in historical:
+    hist_text += f"\n📜 **Historical Match**: {historical['match_count']} occurrences\n"
+    for days, stats in historical['periods'].items():
+        if "error" not in stats:
+            hist_text += (
+                f"  • Next {days}d: Win {stats['win_rate']}% | "
+                f"Avg {stats['avg_return']:+.1f}% | "
+                f"MaxDD {stats['max_dd']:.1f}%\n"
+            )
+        else:
+            hist_text += f"  • Next {days}d: {stats['error']}\n"
+else:
+    hist_text = f"\n📜 **Historical Match**: {historical['error']}"
+
+# 然后在拼装消息时，把 hist_text 放到 Trend Score 和 Momentum Score 的下面。
+        
         market_state = get_market_state(close_price, ma50, ma200)
         trend_text = market_state["trend_text"]
         momentum_text = explain_scores(momentum_score)
@@ -325,23 +449,25 @@ def build_message(data):
         currency = html.escape(info["currency"])
 
         message_parts.append(
-            "\n".join(
-                [
-                    f"<b>{name}</b>",
-                    "",
-                    f"📈 <b>Trend Score: {trend_score}/100</b>",
-                    html.escape(trend_text),
-                    "",
-                    f"⚡ <b>Momentum Score: {momentum_score}/100</b>",
-                    html.escape(momentum_text),
-                    "",
-                    f"• Latest close: {symbol}{close_price:.2f} ({currency})",
-                    f"• MA50: {symbol}{ma50:.2f} ({dev50:+.1f}%)",
-                    f"• MA200: {symbol}{ma200:.2f} ({dev200:+.1f}%)",
-                    f"• RSI (14): {rsi:.1f}",
-                ]
-            )
-        )
+    "\n".join(
+        [
+            f"<b>{name}</b>",
+            "",
+            f"📈 <b>Trend Score: {trend_score}/100</b>",
+            html.escape(trend_text),
+            "",
+            f"⚡ <b>Momentum Score: {momentum_score}/100</b>",
+            html.escape(momentum_text),
+            # 👇 这里插入历史统计文本
+            hist_text,
+            "",
+            f"• Latest close: {symbol}{close_price:.2f} ({currency})",
+            f"• MA50: {symbol}{ma50:.2f} ({dev50:+.1f}%)",
+            f"• MA200: {symbol}{ma200:.2f} ({dev200:+.1f}%)",
+            f"• RSI (14): {rsi:.1f}",
+        ]
+    )
+)
 
     return "\n\n".join(message_parts)
 
