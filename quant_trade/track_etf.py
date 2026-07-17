@@ -493,56 +493,71 @@ def split_telegram_message(text, limit=3900):
 
     return chunks
 
-
 def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
     if not TELEGRAM_TOKEN or not CHAT_ID:
         print("Error: TG_BOT_TOKEN and TG_CHAT_ID must be configured as repository secrets.")
         return False
 
+    # Get the public channel ID (skip if not configured)
+    public_channel_id = os.getenv("PUBLIC_CHANNEL_ID")
+    targets = [CHAT_ID]  # always send to yourself
+    if public_channel_id:
+        targets.append(public_channel_id)
+
     photo_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
     text_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
-    for attempt in range(1, retries + 1):
-        try:
-            if chart_path and Path(chart_path).exists():
-                with Path(chart_path).open("rb") as photo:
-                    caption = text_message if len(text_message) <= TELEGRAM_CAPTION_LIMIT else "📊 ETF trend update"
+    all_success = True
+
+    for target_chat_id in targets:
+        success = False
+        for attempt in range(1, retries + 1):
+            try:
+                # 1. Send chart (if exists)
+                if chart_path and Path(chart_path).exists():
+                    with Path(chart_path).open("rb") as photo:
+                        caption = text_message if len(text_message) <= TELEGRAM_CAPTION_LIMIT else "📊 ETF trend update"
+                        post_telegram_request(
+                            photo_url,
+                            {
+                                "chat_id": target_chat_id,
+                                "caption": caption,
+                                "parse_mode": "HTML",
+                            },
+                            files={"photo": photo},
+                        )
+
+                    # If caption was short enough, we're done for this target
+                    if len(text_message) <= TELEGRAM_CAPTION_LIMIT:
+                        print(f"Telegram chart sent to {target_chat_id} successfully.")
+                        success = True
+                        break
+
+                # 2. Send text (if chart didn't cover it, or chart doesn't exist)
+                for message_part in split_telegram_message(text_message):
                     post_telegram_request(
-                        photo_url,
+                        text_url,
                         {
-                            "chat_id": CHAT_ID,
-                            "caption": caption,
+                            "chat_id": target_chat_id,
+                            "text": message_part,
                             "parse_mode": "HTML",
                         },
-                        files={"photo": photo},
                     )
 
-                if len(text_message) <= TELEGRAM_CAPTION_LIMIT:
-                    print("Telegram chart and caption sent successfully.")
-                    return True
+                print(f"Telegram text sent to {target_chat_id} successfully.")
+                success = True
+                break
 
-            for message_part in split_telegram_message(text_message):
-                post_telegram_request(
-                    text_url,
-                    {
-                        "chat_id": CHAT_ID,
-                        "text": message_part,
-                        "parse_mode": "HTML",
-                    },
-                )
+            except requests.RequestException as error:
+                print(f"Telegram send failed to {target_chat_id} on attempt {attempt}/{retries}: {error}")
+                if attempt < retries:
+                    time.sleep(backoff_seconds)
 
-            print("Telegram update sent successfully.")
-            return True
+        if not success:
+            all_success = False
+            print(f"Error: all attempts failed for target {target_chat_id}.")
 
-        except requests.RequestException as error:
-            print(f"Telegram send failed on attempt {attempt}/{retries}: {error}")
-
-        if attempt < retries:
-            time.sleep(backoff_seconds)
-
-    print("Error: all Telegram send attempts failed.")
-    return False
-
+    return all_success
 
 def main():
     data = fetch_etf_data()
