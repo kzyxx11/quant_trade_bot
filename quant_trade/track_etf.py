@@ -74,6 +74,7 @@ def fetch_etf_data():
 
         data[ticker] = {
             "df": df.tail(CHART_LOOKBACK_ROWS),
+            "df_full": df,
             "name": meta["name"],
             "currency": meta["currency"],
             "symbol": meta["symbol"],
@@ -155,7 +156,7 @@ def run_historical_analysis(df, current_trend_score, current_momentum_score,
     # 去掉缺失值，防止干扰
     df_clean = df_copy.dropna(subset=['Close', 'MA50', 'MA200', 'RSI']).copy()
     if len(df_clean) < 500:
-        return {"error": "历史数据不足，需要至少 500 个交易日的数据。"}
+        return {"error": "Insufficient historical data (need at least 500 trading days)."}
     
     # 存储所有匹配日期的索引
     match_dates = []
@@ -189,7 +190,7 @@ def run_historical_analysis(df, current_trend_score, current_momentum_score,
             match_dates.append(i)
     
     if not match_dates:
-        return {"error": "未找到足够相似的历史结构。"}
+        return {"error": "No matching historical structure found."}
     
     # 统计每个未来周期的表现
     results = {}
@@ -415,7 +416,7 @@ def build_message(data):
 
         # 👇 这一整块缩进 4 个空格，和 trend_score 平级
         historical = run_historical_analysis(
-            df=df,
+            df=info["df_full"],
             current_trend_score=trend_score,
             current_momentum_score=momentum_score
         )
