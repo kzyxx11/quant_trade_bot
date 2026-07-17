@@ -499,7 +499,7 @@ def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
         return False
 
     # 获取公开频道 ID
-    public_channel_id = os.getenv("PUBLIC_CHANNEL_ID")
+    public_channel_id = os.getenv("@ETF_Trend_Monitor")
     targets = [CHAT_ID]  # 总是发给你自己
     if public_channel_id:
         targets.append(public_channel_id)
