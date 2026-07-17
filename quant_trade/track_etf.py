@@ -498,15 +498,13 @@ def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
         print("Error: TG_BOT_TOKEN and TG_CHAT_ID must be configured as repository secrets.")
         return False
 
-    # 获取公开频道 ID
-    public_channel_id = os.getenv("@ETF_Trend_Monitor")
-    targets = [CHAT_ID]  # 总是发给你自己
+    # 硬编码频道ID（测试用，确保它被加入 targets）
+    public_channel_id = "@ETF_Trend_Monitor"  # 已硬编码
+    targets = [CHAT_ID]
     if public_channel_id:
         targets.append(public_channel_id)
 
-    # 🔍 调试输出：打印 targets 列表
-    print(f"[DEBUG] PUBLIC_CHANNEL_ID = '{public_channel_id}'")
-    print(f"[DEBUG] targets = {targets}")
+    print(f"[DEBUG] targets = {targets}")  # 应该显示 ['个人ID', '@ETF_Trend_Monitor']
 
     photo_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
     text_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -515,43 +513,48 @@ def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
 
     for target_chat_id in targets:
         success = False
+        print(f"[DEBUG] Sending to target: {target_chat_id}")
         for attempt in range(1, retries + 1):
             try:
                 # 发送图表
                 if chart_path and Path(chart_path).exists():
                     with Path(chart_path).open("rb") as photo:
                         caption = text_message if len(text_message) <= TELEGRAM_CAPTION_LIMIT else "📊 ETF trend update"
-                        post_telegram_request(
+                        print(f"[DEBUG] Sending photo to {target_chat_id}...")
+                        resp = requests.post(
                             photo_url,
-                            {
-                                "chat_id": target_chat_id,
-                                "caption": caption,
-                                "parse_mode": "HTML",
-                            },
+                            data={"chat_id": target_chat_id, "caption": caption, "parse_mode": "HTML"},
                             files={"photo": photo},
+                            timeout=30
                         )
+                        print(f"[DEBUG] Photo response status: {resp.status_code}")
+                        print(f"[DEBUG] Photo response text: {resp.text}")
+                        if resp.status_code != 200:
+                            raise Exception(f"Photo send failed: {resp.text}")
 
                     if len(text_message) <= TELEGRAM_CAPTION_LIMIT:
                         print(f"Telegram chart sent to {target_chat_id} successfully.")
                         success = True
                         break
 
-                # 发送文字（如果图表没有覆盖全部文字）
+                # 发送文字（如果需要）
                 for message_part in split_telegram_message(text_message):
-                    post_telegram_request(
+                    print(f"[DEBUG] Sending text to {target_chat_id}...")
+                    resp = requests.post(
                         text_url,
-                        {
-                            "chat_id": target_chat_id,
-                            "text": message_part,
-                            "parse_mode": "HTML",
-                        },
+                        data={"chat_id": target_chat_id, "text": message_part, "parse_mode": "HTML"},
+                        timeout=30
                     )
+                    print(f"[DEBUG] Text response status: {resp.status_code}")
+                    print(f"[DEBUG] Text response text: {resp.text}")
+                    if resp.status_code != 200:
+                        raise Exception(f"Text send failed: {resp.text}")
 
                 print(f"Telegram text sent to {target_chat_id} successfully.")
                 success = True
                 break
 
-            except requests.RequestException as error:
+            except Exception as error:
                 print(f"Telegram send failed to {target_chat_id} on attempt {attempt}/{retries}: {error}")
                 if attempt < retries:
                     time.sleep(backoff_seconds)
