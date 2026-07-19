@@ -1,76 +1,95 @@
-# 🤖 Cloud-Native Dual-MA Trend Filter
+# ETF Trend Monitor – Daily Probability-Based Investment Intelligence
 
-[![Live Quant Bot](https://github.com/kzyxx11/quant_trade_bot/actions/workflows/run_bot.yml/badge.svg)](https://github.com/asuki11/quant_trade_bot/actions)
-[![Language](https://img.shields.io/badge/language-Python%20%7C%20PineScript%20v5-blue.svg)](https://github.com/asuki11/quant_trade_bot)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](https://opensource.org/licenses/MIT)
+A lightweight, serverless quantitative analysis tool for long-term ETF investors.  
+Every trading day, it analyzes market structure, calculates trend and momentum scores, and shows you **historical probabilities** — not opinions.
 
-A lightweight, serverless ETF trend-monitoring pipeline that tracks medium- and long-term market structure using the 50-day and 200-day moving averages. It fetches market data from Yahoo Finance, generates updated charts, classifies each ETF into a trend zone, and sends the result to Telegram automatically.
-
-What It Does
-· Tracks global ETFs such as QQQM and CSPX.L
-· Calculates MA50 and MA200 from the latest historical prices
-· Classifies each ETF into a simple three-zone trend model
-· Generates a clean Matplotlib trend chart
-· Sends the chart and strategy summary to Telegram
-· Runs automatically on GitHub Actions with no server to manage
+👉 **Public Channel:** [@ETF_Trend_Monitor](https://t.me/ETF_Trend_Monitor)  
+📅 **Daily update:** 06:30 GMT+8 (after US market close)
 
 ---
 
-## 🏗️ System Architecture
+## What It Does
 
-```text
-Yahoo Finance
-    |
-    | Fetch 2 years of historical ETF prices
-    v
-GitHub Actions
-    |
-    +--> Data cleaning and moving-average calculation
-    |
-    +--> Matplotlib chart generation
-    |
-    +--> Strategy classification and deviation summary
-    v
-Telegram Bot API
-    |
-    v
-Mobile push notification
+This bot tracks major global ETFs (currently CSPX and QQQM) and provides:
 
-📈 Strategy Logic
-The model filters short-term noise by comparing the latest closing price with two trend references:
+- **Trend Score (0–100)** – Where is the market structure right now?
+- **Momentum Score (0–100)** – How strong is the current move?
+- **Historical Match** – When this structure appeared before, what happened next?
 
-✅ Bullish Trend: Price >= MA50
-Price is above the medium-term trend line, suggesting strong upward momentum.
+---
 
-🚨 Pullback Buy Zone: MA200 < Price < MA50
-Price has pulled back below MA50 while still holding above MA200. This is treated as a potential accumulation zone.
+## Why It's Different
 
-💥 Bearish / Risk Zone: Price <= MA200
-Price has broken below the long-term trend line, suggesting weaker market structure and higher downside risk.
+Most investment tools tell you what *they think* will happen.  
+This tool tells you what *historically happened* when the market looked like this.
 
-This project is intended for monitoring and research only. It is not financial advice.
+Example output:
 
-📁 Repository Structure
-.github/workflows/run_bot.yml — GitHub Actions workflow (Runs daily at 22:30 UTC).
-track_etf.py — Core data, charting, and Telegram alert script.
-tradingview/etf_trend_filter.ps - TradingView Pine Script dashboard
+📜 Historical Match: 138 occurrences
+• Next 90d: Win 84.1% | Avg +5.9% | MaxDD -18.4%
+• Next 180d: Win 76.1% | Avg +9.1% | MaxDD -18.0%
 
-🛠️ Technical Notes
-· Serverless automation: Runs on GitHub Actions, so no VPS or always-on machine is required.
-· Secure credentials: Telegram credentials are loaded from GitHub repository secrets.
-· Data cleaning: Missing closing prices are removed before moving averages are calculated.
-· ETF-aware display: Each ETF can define its own display name, quote currency, and currency symbol.
-· Chart-first alerts: Telegram receives both a visual trend chart and a structured strategy summary.
 
-🔒 GitHub Secrets
-Create the following repository secrets before running the workflow:
+That's not a prediction. That's data.
 
-TG_BOT_TOKEN
-TG_CHAT_ID
+---
 
-⏰ Schedule
-The workflow runs daily at 22:30 UTC, which is 06:30 in Kuala Lumpur. This is designed to run after the US market close.
+## How to Use
 
-📬 Author
-Developed by Eric Khoo.
-Open to quantitative development, custom Pine Script indicators, and automated data-pipeline projects.
+1. Join the public channel: [@ETF_Trend_Monitor](https://t.me/ETF_Trend_Monitor)
+2. Receive daily updates automatically
+3. Use the data to inform your own decisions
+
+**No sign-up. No paywall. No spam.**
+
+---
+
+## Supported Assets
+
+| Ticker | Name |
+|---|---|
+| CSPX.L | iShares Core S&P 500 UCITS ETF |
+| QQQM | Invesco NASDAQ 100 ETF |
+
+*More assets may be added over time.*
+
+---
+
+## Methodology
+
+The analysis is built on three layers:
+
+1. **Technical Indicators** – MA50, MA200, RSI (14)
+2. **Composite Scoring** – Trend Score and Momentum Score (0–100)
+3. **Historical Backtesting** – Scans 15 years of data for structurally similar periods and calculates forward returns
+
+All calculations are performed serverlessly via GitHub Actions and delivered to Telegram.
+
+---
+
+## Tech Stack
+
+- Python (pandas, matplotlib, yfinance)
+- GitHub Actions (scheduled + on-demand execution)
+- Cloudflare Workers (Telegram webhook bridge)
+- Telegram Bot API
+
+---
+
+## Feedback & Contact
+
+Found a bug? Have a suggestion?  
+Reach out: [@erickhoo11](https://t.me/erickhoo11) 
+
+---
+
+## Disclaimer
+
+This tool provides **data and statistical analysis only**.  
+It does not constitute financial advice. Always do your own research before making investment decisions.
+
+---
+
+## License
+
+MIT
