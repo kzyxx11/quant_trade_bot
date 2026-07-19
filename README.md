@@ -8,7 +8,7 @@ A lightweight, serverless quantitative analysis tool for long-term investors.
 Every trading day, it analyzes market structure, calculates trend and momentum scores, and shows you **historical probabilities** — not opinions.
 
 👉 **Public Channel:** [@ETF_Trend_Monitor](https://t.me/ETF_Trend_Monitor)  
-📅 **Daily update:** 06:30 GMT+8 (after US market close)
+📅 **Daily update:** around 07:30 GMT+8 (after US market close)
 
 ---
 
