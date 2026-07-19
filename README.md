@@ -1,6 +1,6 @@
-# ETF Trend Monitor – Daily Probability-Based Investment Intelligence
+# Quant Trade Bot – Daily Probability-Based Market Intelligence
 
-A lightweight, serverless quantitative analysis tool for long-term ETF investors.  
+A lightweight, serverless quantitative analysis tool for long-term investors.  
 Every trading day, it analyzes market structure, calculates trend and momentum scores, and shows you **historical probabilities** — not opinions.
 
 👉 **Public Channel:** [@ETF_Trend_Monitor](https://t.me/ETF_Trend_Monitor)  
@@ -10,7 +10,7 @@ Every trading day, it analyzes market structure, calculates trend and momentum s
 
 ## What It Does
 
-This bot tracks major global ETFs (currently CSPX and QQQM) and provides:
+This bot tracks major global assets and provides:
 
 - **Trend Score (0–100)** – Where is the market structure right now?
 - **Momentum Score (0–100)** – How strong is the current move?
@@ -44,7 +44,7 @@ That's not a prediction. That's data.
 
 ---
 
-## Supported Assets
+## Currently Tracked Assets
 
 | Ticker | Name |
 |---|---|
