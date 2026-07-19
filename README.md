@@ -1,3 +1,5 @@
+📊 **Live Status:** [![Daily Run](https://github.com/kzyxx11/quant_trade_bot/actions/workflows/run_bot.yml/badge.svg)](https://github.com/kzyxx11/quant_trade_bot/actions)
+
 # Quant Trade Bot – Daily Probability-Based Market Intelligence
 
 A lightweight, serverless quantitative analysis tool for long-term investors.  
