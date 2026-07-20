@@ -4,9 +4,9 @@ Stop guessing. Start knowing.
 
 📊 **Live Status:** [![Daily Run](https://github.com/kzyxx11/quant_trade_bot/actions/workflows/run_bot.yml/badge.svg)](https://github.com/kzyxx11/quant_trade_bot/actions)
 
-📝 Read the full story: [Dev.to](https://dev.to/kzyxx11/how-i-built-a-serverless-etf-backtest-bot-with-github-actions-and-telegram-3g20) | [Medium](https://medium.com/@erickhoo1104/how-i-built-a-serverless-etf-backtest-bot-with-github-actions-and-telegram-2812ab010f98?sharedUserId=erickhoo1104)
-
 # Quant Trade Bot – Daily Probability-Based Market Intelligence
+
+📝 Read the full story: [Dev.to](https://dev.to/kzyxx11/how-i-built-a-serverless-etf-backtest-bot-with-github-actions-and-telegram-3g20) | [Medium](https://medium.com/@erickhoo1104/how-i-built-a-serverless-etf-backtest-bot-with-github-actions-and-telegram-2812ab010f98?sharedUserId=erickhoo1104)
 
 A lightweight, serverless quantitative analysis tool for long-term investors.  
 Every trading day, it analyzes market structure, calculates trend and momentum scores, and shows you **historical probabilities** — not opinions.
