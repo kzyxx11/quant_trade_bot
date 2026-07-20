@@ -27,12 +27,7 @@ ETFS = {
         "name": "QQQM (Invesco NASDAQ 100 ETF)",
         "currency": "USD",
         "symbol": "$",
-    },
-    "EEM": {
-    "name": "EEM (iShares MSCI Emerging Markets ETF)",
-    "currency": "USD",
-    "symbol": "$",
-    },
+    }
 }
 
 
