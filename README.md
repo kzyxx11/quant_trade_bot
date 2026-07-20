@@ -102,4 +102,4 @@ MIT
 
 ---
 
-📝 Read the full story: [Dev.to]((https://dev.to/kzyxx11/how-i-built-a-serverless-etf-backtest-bot-with-github-actions-and-telegram-3g20)) | [Medium]((https://medium.com/@erickhoo1104/how-i-built-a-serverless-etf-backtest-bot-with-github-actions-and-telegram-2812ab010f98?sharedUserId=erickhoo1104))
+📝 Read the full story: [Dev.to](https://dev.to/kzyxx11/how-i-built-a-serverless-etf-backtest-bot-with-github-actions-and-telegram-3g20) | [Medium](https://medium.com/@erickhoo1104/how-i-built-a-serverless-etf-backtest-bot-with-github-actions-and-telegram-2812ab010f98?sharedUserId=erickhoo1104)
