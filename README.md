@@ -12,6 +12,8 @@ Every trading day, it analyzes market structure, calculates trend and momentum s
 👉 **Public Channel:** [@ETF_Trend_Monitor](https://t.me/ETF_Trend_Monitor)  
 📅 **Daily update:** around 07:30 GMT+8 (after US market close)
 
+📝 Read the full story: [Dev.to](https://dev.to/kzyxx11/how-i-built-a-serverless-etf-backtest-bot-with-github-actions-and-telegram-3g20) | [Medium](https://medium.com/@erickhoo1104/how-i-built-a-serverless-etf-backtest-bot-with-github-actions-and-telegram-2812ab010f98?sharedUserId=erickhoo1104)
+
 ---
 
 ## What It Does
@@ -99,7 +101,3 @@ It does not constitute financial advice. Always do your own research before maki
 ## License
 
 MIT
-
----
-
-📝 Read the full story: [Dev.to](https://dev.to/kzyxx11/how-i-built-a-serverless-etf-backtest-bot-with-github-actions-and-telegram-3g20) | [Medium](https://medium.com/@erickhoo1104/how-i-built-a-serverless-etf-backtest-bot-with-github-actions-and-telegram-2812ab010f98?sharedUserId=erickhoo1104)
