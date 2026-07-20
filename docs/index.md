@@ -58,8 +58,8 @@ All services are **serverless and free** — total running cost: $0/month.
 
 - **GitHub repo:** [github.com/kzyxx11/quant_trade_bot](https://github.com/kzyxx11/quant_trade_bot)
 - **Telegram channel:** [@ETF_Trend_Monitor](https://t.me/ETF_Trend_Monitor) (daily updates)
-- **Blog post (Dev.to):** [link](https://dev.to/kzyxx11/how-i-built-a-serverless-etf-backtest-bot-with-github-actions-and-telegram-3g20)
-- **Blog post (Medium):** [link](https://medium.com/@erickhoo1104/how-i-built-a-serverless-etf-backtest-bot-with-github-actions-and-telegram-2812ab010f98)
+- **Blog post (Dev.to):** (https://dev.to/kzyxx11/how-i-built-a-serverless-etf-backtest-bot-with-github-actions-and-telegram-3g20)
+- **Blog post (Medium):** (https://medium.com/@erickhoo1104/how-i-built-a-serverless-etf-backtest-bot-with-github-actions-and-telegram-2812ab010f98)
 
 ---
 
