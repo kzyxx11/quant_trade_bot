@@ -6,7 +6,7 @@
 
 ## Latest Snapshot
 
-![daily update]((https://imgur.com/a/EhjyK0D))
+![daily update]([https://i.imgur.com/你的图片ID.png](https://i.imgur.com/uY1oFQk.jpeg))
 
 Example output:
 
