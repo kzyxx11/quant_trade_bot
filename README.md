@@ -1,3 +1,5 @@
+Stop guessing. Start knowing.
+
 [![Join Telegram Channel](https://img.shields.io/badge/Join-Telegram%20Channel-0088cc?style=for-the-badge&logo=telegram)](https://t.me/ETF_Trend_Monitor)
 
 📊 **Live Status:** [![Daily Run](https://github.com/kzyxx11/quant_trade_bot/actions/workflows/run_bot.yml/badge.svg)](https://github.com/kzyxx11/quant_trade_bot/actions)
