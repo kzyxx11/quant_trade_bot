@@ -28,6 +28,11 @@ ETFS = {
         "currency": "USD",
         "symbol": "$",
     },
+    "EEM": {
+    "name": "EEM (iShares MSCI Emerging Markets ETF)",
+    "currency": "USD",
+    "symbol": "$",
+    },
 }
 
 
