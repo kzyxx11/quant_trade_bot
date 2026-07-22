@@ -548,6 +548,9 @@ def append_history(data, date_str):
         print(f"[History] Appended {len(lines)} records to history.csv")
 
 def generate_trend_chart():
+    """
+    读取 history.csv，为每个资产生成独立的趋势图，保存为 docs/trend_{ticker}.png
+    """
     import pandas as pd
     import matplotlib.pyplot as plt
     import matplotlib.dates as mdates
@@ -564,34 +567,25 @@ def generate_trend_chart():
     
     for ticker in tickers:
         ticker_df = df[df["ticker"] == ticker].sort_values("date")
-        ticker_df = ticker_df.tail(30)
+        ticker_df = ticker_df.tail(30)  # 只显示最近30天
         
         fig, ax = plt.subplots(figsize=(10, 3))
         ax.plot(ticker_df["date"], ticker_df["trend_score"], color="#58a6ff", linewidth=2, label="Trend Score")
         ax.axhline(y=50, color="#8b949e", linestyle="--", linewidth=0.8, alpha=0.5)
         ax.set_title(f"{ticker} - Trend Score Over Time", fontsize=10, color="#e6edf3")
         ax.set_ylabel("Trend Score", color="#8b949e")
-        
-        # 强制固定 y 轴范围，禁止自动调整
         ax.set_ylim(0, 110)
         ax.set_autoscale_on(False)
-        
         ax.grid(True, alpha=0.1, color="#30363d")
         ax.legend(loc="lower left")
         
+        # 在图表右上角固定位置显示最新分数（不随数据点移动）
         if not ticker_df.empty:
-            last = ticker_df.iloc[-1]
-            ax.annotate(
-                f"{last['trend_score']:.0f}",
-                xy=(last["date"], last["trend_score"]),
-                xytext=(0, 10),
-                textcoords="offset points",
-                color="#58a6ff",
-                fontsize=10,
-                fontweight="bold",
-                ha='center',
-                va='bottom'
-        )
+            last_score = ticker_df.iloc[-1]["trend_score"]
+            ax.text(0.98, 0.98, f"Current: {last_score:.0f}", 
+                    transform=ax.transAxes,
+                    color="#58a6ff", fontsize=11, fontweight="bold",
+                    verticalalignment='top', horizontalalignment='right')
         
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
         ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
