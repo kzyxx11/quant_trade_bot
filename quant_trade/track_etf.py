@@ -565,14 +565,14 @@ def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
 
     return all_success
 
-def generate_html(data, date_str):
+    def generate_html(data, date_str):
     """
     生成纯 HTML 看板页面，包含所有资产的最新分析数据。
     输出路径为 docs/index.html，由 GitHub Pages 托管。
     """
     html = """<!DOCTYPE html>
-<html lang="en">
-<head>
+    <html lang="en">
+    <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quant Trade Bot - Daily Dashboard</title>
@@ -691,15 +691,15 @@ def generate_html(data, date_str):
     return html
 
 def main():
-    data = fetch_etf_data()
+data = fetch_etf_data()
     if not data:
         print("No data fetched. Exiting.")
         return
 
     # 1. 生成并发送 Telegram 消息
-    chart_path = generate_chart(data)
-    message = build_message(data)
-    send_to_telegram(chart_path, message)
+chart_path = generate_chart(data)
+message = build_message(data)
+send_to_telegram(chart_path, message)
 
     # 2. 生成网页看板 (HTML)
     from datetime import datetime
@@ -718,4 +718,4 @@ def main():
     print(f"[Success] Dashboard updated at {index_path}")
 
 if __name__ == "__main__":
-    main()
+main()
