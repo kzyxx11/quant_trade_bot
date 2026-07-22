@@ -499,6 +499,107 @@ def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
 
     return all_success
 
+def append_history(data, date_str):
+    """
+    把当天每个资产的核心指标追加到 history.csv
+    """
+    history_path = Path("docs/history.csv")
+    
+    # 如果文件不存在，创建表头
+    if not history_path.exists():
+        with open(history_path, "w") as f:
+            f.write("date,ticker,close,trend_score,momentum_score,match_count,win_rate_90d\n")
+    
+    # 准备新行
+    lines = []
+    for ticker, info in data.items():
+        df = info["df"]
+        close_price = df["Close"].iloc[-1]
+        ma50 = df["MA50"].iloc[-1]
+        ma200 = df["MA200"].iloc[-1]
+        
+        trend_score = calculate_trend_score(close_price, ma50, ma200)
+        momentum_score = calculate_momentum_score(df["RSI"])
+        historical = run_historical_analysis(
+            df=info["df_full"],
+            current_trend_score=trend_score,
+            current_momentum_score=momentum_score
+        )
+        
+        match_count = historical.get("match_count", 0)
+        win_rate = historical.get("periods", {}).get(90, {}).get("win_rate", 0)
+        
+        # 读取现有的历史数据，检查今天是否已经记录过
+        import pandas as pd
+        existing = pd.read_csv(history_path) if history_path.exists() else pd.DataFrame()
+        
+        # 如果今天已有记录，跳过
+        if not existing.empty and len(existing[existing["date"] == date_str]) > 0:
+            print(f"[History] Data for {date_str} already exists, skipping append.")
+            return
+        
+        lines.append(f"{date_str},{ticker},{close_price:.2f},{trend_score},{momentum_score},{match_count},{win_rate:.1f}")
+    
+    # 追加到文件
+    if lines:
+        with open(history_path, "a") as f:
+            for line in lines:
+                f.write(line + "\n")
+        print(f"[History] Appended {len(lines)} records to history.csv")
+
+def generate_trend_chart():
+    """
+    读取 history.csv，为每个资产生成趋势图，保存为 docs/trend.png
+    """
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
+    
+    history_path = Path("docs/history.csv")
+    if not history_path.exists():
+        print("[History] No history data found, skipping trend chart.")
+        return None
+    
+    df = pd.read_csv(history_path)
+    df["date"] = pd.to_datetime(df["date"])
+    
+    # 按 ticker 分组画图
+    tickers = df["ticker"].unique()
+    fig, axes = plt.subplots(len(tickers), 1, figsize=(12, 4 * len(tickers)), sharex=True)
+    if len(tickers) == 1:
+        axes = [axes]
+    
+    for idx, ticker in enumerate(tickers):
+        ax = axes[idx]
+        ticker_df = df[df["ticker"] == ticker].sort_values("date")
+        
+        ax.plot(ticker_df["date"], ticker_df["trend_score"], color="#58a6ff", linewidth=2, label="Trend Score")
+        ax.axhline(y=50, color="#8b949e", linestyle="--", linewidth=0.8, alpha=0.5)
+        ax.set_title(f"{ticker} - Trend Score Over Time", fontsize=12, color="#e6edf3")
+        ax.set_ylabel("Trend Score", color="#8b949e")
+        ax.set_ylim(0, 100)
+        ax.grid(True, alpha=0.1, color="#30363d")
+        ax.legend(loc="lower left")
+        
+        # 在最后一个点标注数值
+        if not ticker_df.empty:
+            last = ticker_df.iloc[-1]
+            ax.annotate(f"{last['trend_score']:.0f}", 
+                       xy=(last["date"], last["trend_score"]),
+                       xytext=(5, 5), textcoords="offset points",
+                       color="#58a6ff", fontsize=10, fontweight="bold")
+        
+        # 格式化 x 轴日期
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
+        ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
+        plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+    
+    plt.tight_layout()
+    chart_path = Path("docs/trend.png")
+    plt.savefig(chart_path, dpi=150, facecolor='#0d1117', edgecolor='none')
+    plt.close()
+    print(f"[History] Trend chart saved to {chart_path}")
+    return chart_path
 
 def generate_html(data, date_str):
     """
@@ -604,6 +705,7 @@ def generate_html(data, date_str):
         html_template += f"""
     <div class="card">
         <h2>{info['name']}</h2>
+        <img src="trend.png" alt="Trend Score History" style="width:100%; max-width:900px; border-radius:8px; margin-bottom:20px; border:1px solid #30363d;">
         <div class="row"><span class="label">Latest Close</span><span class="value">{info['symbol']}{close_price:.2f}</span></div>
         <div class="row"><span class="label">Trend Score</span><span class="value">{trend_score}/100</span></div>
         <div class="row"><span class="label">Momentum Score</span><span class="value">{momentum_score}/100</span></div>
@@ -630,6 +732,7 @@ def main():
         print("No data fetched. Exiting.")
         return
 
+    generate_trend_chart()
     chart_path = generate_chart(data)
     message = build_message(data)
     send_to_telegram(chart_path, message)
