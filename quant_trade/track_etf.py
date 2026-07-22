@@ -441,9 +441,11 @@ def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
         return False
 
     public_channel_id = os.getenv("PUBLIC_CHANNEL_ID")
+    print(f"[DEBUG] PUBLIC_CHANNEL_ID = '{public_channel_id}'")
     targets = [CHAT_ID]
     if public_channel_id:
         targets.append(public_channel_id)
+    print(f"[DEBUG] targets = {targets}")
 
     photo_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
     text_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
