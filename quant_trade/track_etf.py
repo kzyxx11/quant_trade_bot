@@ -719,3 +719,12 @@ send_to_telegram(chart_path, message)
 
 if __name__ == "__main__":
 main()
+
+from workers import Response, WorkerEntrypoint
+
+class Default(WorkerEntrypoint):
+    async def fetch(self, request):
+        # 显式允许 POST 请求，给 Telegram 一个 200 OK 的响应
+        if request.method == "POST":
+            return Response("OK", status=200)
+        return Response("Bot is running!", status=200)
