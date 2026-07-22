@@ -580,17 +580,17 @@ def generate_trend_chart():
         ax.legend(loc="lower left")
         
         if not ticker_df.empty:
-        last = ticker_df.iloc[-1]
-        ax.annotate(
-            f"{last['trend_score']:.0f}",
-            xy=(last["date"], last["trend_score"]),
-            xytext=(0, 10),
-            textcoords="offset points",
-            color="#58a6ff",
-            fontsize=10,
-            fontweight="bold",
-            ha='center',
-            va='bottom'
+            last = ticker_df.iloc[-1]
+            ax.annotate(
+                f"{last['trend_score']:.0f}",
+                xy=(last["date"], last["trend_score"]),
+                xytext=(0, 10),
+                textcoords="offset points",
+                color="#58a6ff",
+                fontsize=10,
+                fontweight="bold",
+                ha='center',
+                va='bottom'
         )
         
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
