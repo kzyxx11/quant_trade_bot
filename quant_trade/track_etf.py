@@ -1,7 +1,7 @@
 import html
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import matplotlib.dates as mdates
@@ -635,7 +635,8 @@ def main():
     send_to_telegram(chart_path, message)
 
     # Generate web dashboard
-    today_str = datetime.now().strftime("%Y-%m-%d %H:%M (GMT+8)")
+    tz_gmt8 = timezone(timedelta(hours=8))
+    today_str = datetime.now(tz_gmt8).strftime("%Y-%m-%d %H:%M (GMT+8)")
     html_content = generate_html(data, today_str)
 
     docs_dir = Path("docs")
