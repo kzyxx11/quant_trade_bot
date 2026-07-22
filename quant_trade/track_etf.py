@@ -620,8 +620,10 @@ def generate_html(data, date_str):
 </body>
 </html>
 """
-    return html_template.format(date=date_str)
-
+    html_template = html_template.replace("{date}", date_str)
+    html_template = html_template.replace("(date)", date_str)  
+    return html_template
+    
 def main():
     data = fetch_etf_data()
     if not data:
