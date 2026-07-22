@@ -719,13 +719,3 @@ send_to_telegram(chart_path, message)
 
 if __name__ == "__main__":
 main()
-
-# ==========================================================
-# 🛠️ 解决 Webhook 405 报错的标准顶级入口
-# ==========================================================
-from js import Response
-
-async def on_fetch(request, env, ctx):
-    if request.method == "POST":
-        return Response.new("OK", status=200)
-    return Response.new("Bot is running perfectly!", status=200)
