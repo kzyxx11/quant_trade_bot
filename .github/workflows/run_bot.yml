@@ -7,6 +7,9 @@ on:
   repository_dispatch:    # Allows external remote wake-up via API
     types: [ telegram_trigger ]
 
+permissions:
+  contents: write
+
 jobs:
   run-etf-trend-monitor:
     runs-on: ubuntu-latest
