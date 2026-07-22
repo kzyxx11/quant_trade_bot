@@ -732,6 +732,10 @@ def main():
         print("No data fetched. Exiting.")
         return
 
+    tz_gmt8 = timezone(timedelta(hours=8))
+    today_str = datetime.now(tz_gmt8).strftime("%Y-%m-%d")
+    append_history(data, today_str)
+    
     generate_trend_chart()
     chart_path = generate_chart(data)
     message = build_message(data)
