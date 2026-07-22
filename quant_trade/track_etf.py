@@ -548,9 +548,6 @@ def append_history(data, date_str):
         print(f"[History] Appended {len(lines)} records to history.csv")
 
 def generate_trend_chart():
-    """
-    读取 history.csv，为每个资产生成趋势图，保存为 docs/trend.png
-    """
     import pandas as pd
     import matplotlib.pyplot as plt
     import matplotlib.dates as mdates
@@ -558,30 +555,28 @@ def generate_trend_chart():
     history_path = Path("docs/history.csv")
     if not history_path.exists():
         print("[History] No history data found, skipping trend chart.")
-        return None
+        return
     
     df = pd.read_csv(history_path)
     df["date"] = pd.to_datetime(df["date"])
     
-    # 按 ticker 分组画图
     tickers = df["ticker"].unique()
-    fig, axes = plt.subplots(len(tickers), 1, figsize=(12, 4 * len(tickers)), sharex=True)
-    if len(tickers) == 1:
-        axes = [axes]
     
-    for idx, ticker in enumerate(tickers):
-        ax = axes[idx]
+    for ticker in tickers:
         ticker_df = df[df["ticker"] == ticker].sort_values("date")
         
+        # 只保留最近 30 天的数据，让图表更清晰
+        ticker_df = ticker_df.tail(30)
+        
+        fig, ax = plt.subplots(figsize=(10, 3))
         ax.plot(ticker_df["date"], ticker_df["trend_score"], color="#58a6ff", linewidth=2, label="Trend Score")
         ax.axhline(y=50, color="#8b949e", linestyle="--", linewidth=0.8, alpha=0.5)
-        ax.set_title(f"{ticker} - Trend Score Over Time", fontsize=12, color="#e6edf3")
+        ax.set_title(f"{ticker} - Trend Score Over Time", fontsize=10, color="#e6edf3")
         ax.set_ylabel("Trend Score", color="#8b949e")
-        ax.set_ylim(0, 100)
+        ax.set_ylim(0, 105)  # 给标注留空间
         ax.grid(True, alpha=0.1, color="#30363d")
         ax.legend(loc="lower left")
         
-        # 在最后一个点标注数值
         if not ticker_df.empty:
             last = ticker_df.iloc[-1]
             ax.annotate(f"{last['trend_score']:.0f}", 
@@ -589,16 +584,16 @@ def generate_trend_chart():
                        xytext=(5, 5), textcoords="offset points",
                        color="#58a6ff", fontsize=10, fontweight="bold")
         
-        # 格式化 x 轴日期
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
         ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
-    
-    plt.tight_layout()
-    chart_path = Path("docs/trend.png")
-    plt.savefig(chart_path, dpi=150, facecolor='#0d1117', edgecolor='none')
-    plt.close()
-    print(f"[History] Trend chart saved to {chart_path}")
+        
+        plt.tight_layout()
+        # 保存为按 ticker 命名的独立图片
+        chart_path = Path(f"docs/trend_{ticker}.png")
+        plt.savefig(chart_path, dpi=150, facecolor='#0d1117', edgecolor='none')
+        plt.close()
+        print(f"[History] Trend chart saved to {chart_path}")
     return chart_path
 
 def generate_html(data, date_str):
@@ -705,7 +700,7 @@ def generate_html(data, date_str):
         html_template += f"""
     <div class="card">
         <h2>{info['name']}</h2>
-        <img src="trend.png" alt="Trend Score History" style="width:100%; max-width:900px; border-radius:8px; margin-bottom:20px; border:1px solid #30363d;">
+        <img src="trend_{ticker}.png" alt="Trend Score History" style="width:100%; max-width:900px; border-radius:8px; margin-bottom:20px; border:1px solid #30363d;">
         <div class="row"><span class="label">Latest Close</span><span class="value">{info['symbol']}{close_price:.2f}</span></div>
         <div class="row"><span class="label">Trend Score</span><span class="value">{trend_score}/100</span></div>
         <div class="row"><span class="label">Momentum Score</span><span class="value">{momentum_score}/100</span></div>
