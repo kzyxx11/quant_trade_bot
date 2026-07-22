@@ -1,6 +1,7 @@
 import html
 import os
 import time
+from datetime import datetime
 from pathlib import Path
 
 import matplotlib.dates as mdates
@@ -27,7 +28,7 @@ ETFS = {
         "name": "QQQM (Invesco NASDAQ 100 ETF)",
         "currency": "USD",
         "symbol": "$",
-    }
+    },
 }
 
 
@@ -55,11 +56,9 @@ def fetch_etf_data():
             )
             continue
 
-        # Calculate Technical Vectors
         df["MA50"] = df["Close"].rolling(window=50).mean()
         df["MA200"] = df["Close"].rolling(window=200).mean()
 
-        # Native High-Precision RSI (14) Engine
         delta = df["Close"].diff()
         gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
@@ -84,12 +83,7 @@ def fetch_etf_data():
 
 
 def calculate_trend_score(close_price, ma50, ma200):
-    """
-    Trend Score (0-100): Measures structural trend health.
-    0-30: Bearish structure | 30-50: Weak/Transitional | 50-70: Constructive | 70-100: Strong uptrend
-    """
-    score = 50  # neutral baseline
-
+    score = 50
     if close_price > ma200:
         score += 20
         dist200 = ((close_price - ma200) / ma200) * 100
@@ -113,9 +107,6 @@ def calculate_trend_score(close_price, ma50, ma200):
 
 
 def calculate_momentum_score(rsi_series):
-    """
-    Momentum Score (0-100): Measures short-term momentum strength and direction.
-    """
     latest_rsi = rsi_series.iloc[-1]
     prev_rsi = rsi_series.iloc[-6] if len(rsi_series) >= 6 else rsi_series.iloc[0]
     rsi_change = latest_rsi - prev_rsi
@@ -125,74 +116,48 @@ def calculate_momentum_score(rsi_series):
 
     return max(0, min(100, round(score)))
 
-def run_historical_analysis(df, current_trend_score, current_momentum_score, 
+
+def run_historical_analysis(df, current_trend_score, current_momentum_score,
                              lookforward_days=[90, 180], tolerance=8):
-    """
-    扫描历史数据，找出所有与"当前趋势/动量结构相似"的日期，
-    统计这些日期之后 3 个月和 6 个月的涨跌表现。
-    
-    Parameters:
-        df: 包含 'Close', 'MA50', 'MA200', 'RSI' 列的完整历史 DataFrame
-        current_trend_score: 当前计算出的 Trend Score (0-100)
-        current_momentum_score: 当前计算出的 Momentum Score (0-100)
-        lookforward_days: 列表，例如 [90, 180]，表示统计未来 90 天和 180 天
-        tolerance: 分数容忍度，±8 分内都算"相似结构"
-    
-    Returns:
-        dict: 包含匹配次数、各周期的平均收益、上涨概率、最大回撤
-    """
-    # 确保数据有完整的列
     df_copy = df.copy()
     df_copy['MA50'] = df_copy['Close'].rolling(window=50).mean()
     df_copy['MA200'] = df_copy['Close'].rolling(window=200).mean()
-    
-    # 计算历史 RSI（14天）
+
     delta = df_copy['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
     rs = gain / (loss + 1e-10)
     df_copy['RSI'] = 100 - (100 / (1 + rs))
-    
-    # 去掉缺失值，防止干扰
+
     df_clean = df_copy.dropna(subset=['Close', 'MA50', 'MA200', 'RSI']).copy()
     if len(df_clean) < 500:
         return {"error": "Insufficient historical data (need at least 500 trading days)."}
-    
-    # 存储所有匹配日期的索引
+
     match_dates = []
-    
-    # 循环扫描历史（从第 250 天开始，确保均线稳定）
+
     for i in range(250, len(df_clean) - max(lookforward_days)):
         row = df_clean.iloc[i]
         close = row['Close']
         ma50 = row['MA50']
         ma200 = row['MA200']
         rsi = row['RSI']
-        
-        # 计算该历史日期的分数（使用你现有的评分逻辑）
-        # 注意：calculate_trend_score 需要 3 个参数
+
         trend_score = calculate_trend_score(close, ma50, ma200)
-        
-        # 计算动量分数需要 RSI 序列，但这里我们只有单个数值，用简易计算方式
-        # 为了简化，这里用 RSI 的当前值作为动量分数基准（你也可以写更复杂的逻辑）
-        # 但为了保持一致性，我们直接调用你现有的函数但传入临时 Series
-        # 简单起见：把当前 RSI 当成分数基准，再取最近 6 天的变化
+
         if i >= 6:
             prev_rsi = df_clean.iloc[i-6]['RSI'] if i-6 >=0 else rsi
         else:
             prev_rsi = rsi
         rsi_change = rsi - prev_rsi
         momentum_score = min(100, max(0, round(rsi + rsi_change * 0.8)))
-        
-        # 检查是否匹配当前结构（允许误差 ±tolerance）
-        if (abs(trend_score - current_trend_score) <= tolerance and 
+
+        if (abs(trend_score - current_trend_score) <= tolerance and
             abs(momentum_score - current_momentum_score) <= tolerance):
             match_dates.append(i)
-    
+
     if not match_dates:
         return {"error": "No matching historical structure found."}
-    
-    # 统计每个未来周期的表现
+
     results = {}
     for days in lookforward_days:
         returns = []
@@ -202,7 +167,7 @@ def run_historical_analysis(df, current_trend_score, current_momentum_score,
             end_price = df_clean.iloc[end_idx]['Close']
             ret = (end_price / start_price) - 1
             returns.append(ret)
-        
+
         if returns:
             avg_ret = sum(returns) / len(returns) * 100
             positive_count = sum(1 for r in returns if r > 0)
@@ -215,18 +180,15 @@ def run_historical_analysis(df, current_trend_score, current_momentum_score,
                 "max_dd": round(max_drawdown, 1)
             }
         else:
-            results[days] = {"error": "无有效数据"}
-    
+            results[days] = {"error": "No valid data"}
+
     return {
         "match_count": len(match_dates),
         "periods": results
     }
 
+
 def get_market_state(close_price, ma50, ma200):
-    """
-    Single source of truth for structural state, shared by both the chart title
-    and the message text to avoid contradictory labels.
-    """
     above_ma50 = close_price > ma50
     above_ma200 = close_price > ma200
 
@@ -256,10 +218,6 @@ def get_market_state(close_price, ma50, ma200):
 
 
 def explain_scores(momentum_score):
-    """
-    Momentum explanation only. Trend explanation now comes from get_market_state()
-    so it always matches the actual price-vs-MA relationship shown on the chart.
-    """
     if momentum_score >= 70:
         momentum_text = "Momentum is strong and accelerating — approaching overbought territory."
     elif momentum_score >= 50:
@@ -268,27 +226,15 @@ def explain_scores(momentum_score):
         momentum_text = "Momentum is soft; buyers are losing short-term control."
     else:
         momentum_text = "Momentum is deeply negative — approaching oversold territory."
-
     return momentum_text
 
+
 def classify_trend(close_price, ma50, ma200):
-    """
-    Retained for chart-title classification (kept simple/legacy for visuals).
-    """
     if close_price <= ma200:
-        return {
-            "emoji": "🚨",
-            "label": "Risk Warning",
-        }
+        return {"emoji": "🚨", "label": "Risk Warning"}
     if close_price < ma50:
-        return {
-            "emoji": "🟡",
-            "label": "Pullback Buy Zone",
-        }
-    return {
-        "emoji": "✅",
-        "label": "Healthy Uptrend",
-    }
+        return {"emoji": "🟡", "label": "Pullback Buy Zone"}
+    return {"emoji": "✅", "label": "Healthy Uptrend"}
 
 
 def generate_chart(data):
@@ -327,7 +273,6 @@ def generate_chart(data):
         dev200 = ((latest_close - latest_ma200) / latest_ma200) * 100
         trend = classify_trend(latest_close, latest_ma50, latest_ma200)
 
-        # ------------------ Pane 1: Price Structure Canvas ------------------
         main_ax.plot(df.index, df["Close"], color="#ffffff", linewidth=1.5, label="Spot Price", alpha=0.9)
         main_ax.plot(df.index, df["MA50"], color="#ffb703", linestyle="--", linewidth=1.2, label="MA50 (Mid-term)")
         main_ax.plot(df.index, df["MA200"], color="#219ebc", linewidth=1.5, label="MA200 (Structural)")
@@ -364,7 +309,6 @@ def generate_chart(data):
         main_ax.tick_params(axis='both', colors='#888888', labelsize=8.5)
         main_ax.legend(loc="lower left", frameon=True, facecolor='#121212', edgecolor='#222222', fontsize=8.5)
 
-        # ------------------ Pane 2: RSI Relative Strength Subplot ------------------
         rsi_ax.plot(df.index, df["RSI"], color="#8338ec", linewidth=1.2, label="RSI (14)", alpha=0.85)
         rsi_ax.axhline(70, color="#d90429", linestyle=":", linewidth=1.0, alpha=0.6)
         rsi_ax.axhline(30, color="#00b4d8", linestyle=":", linewidth=1.0, alpha=0.6)
@@ -394,10 +338,7 @@ def generate_chart(data):
 
 def build_message(data):
     if not data:
-        return (
-            "⚠️ <b>ETF Trend Monitor</b>\n\n"
-            "No valid ETF data was retrieved in this run."
-        )
+        return "⚠️ <b>ETF Trend Monitor</b>\n\nNo valid ETF data was retrieved in this run."
 
     message_parts = ["📊 <b>ETF Trend &amp; Momentum Monitor</b>"]
 
@@ -414,7 +355,6 @@ def build_message(data):
         trend_score = calculate_trend_score(close_price, ma50, ma200)
         momentum_score = calculate_momentum_score(df["RSI"])
 
-        # 👇 这一整块缩进 4 个空格，和 trend_score 平级
         historical = run_historical_analysis(
             df=info["df_full"],
             current_trend_score=trend_score,
@@ -464,6 +404,7 @@ def build_message(data):
 
     return "\n\n".join(message_parts)
 
+
 def post_telegram_request(url, payload, files=None):
     response = requests.post(url, data=payload, files=files, timeout=30)
     response.raise_for_status()
@@ -493,18 +434,16 @@ def split_telegram_message(text, limit=3900):
 
     return chunks
 
+
 def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
     if not TELEGRAM_TOKEN or not CHAT_ID:
         print("Error: TG_BOT_TOKEN and TG_CHAT_ID must be configured as repository secrets.")
         return False
 
-    # 硬编码频道ID（测试用，确保它被加入 targets）
-    public_channel_id = "@ETF_Trend_Monitor"  # 已硬编码
+    public_channel_id = os.getenv("PUBLIC_CHANNEL_ID")
     targets = [CHAT_ID]
     if public_channel_id:
         targets.append(public_channel_id)
-
-    print(f"[DEBUG] targets = {targets}")  # 应该显示 ['个人ID', '@ETF_Trend_Monitor']
 
     photo_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
     text_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -513,48 +452,41 @@ def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
 
     for target_chat_id in targets:
         success = False
-        print(f"[DEBUG] Sending to target: {target_chat_id}")
         for attempt in range(1, retries + 1):
             try:
-                # 发送图表
                 if chart_path and Path(chart_path).exists():
                     with Path(chart_path).open("rb") as photo:
                         caption = text_message if len(text_message) <= TELEGRAM_CAPTION_LIMIT else "📊 ETF trend update"
-                        print(f"[DEBUG] Sending photo to {target_chat_id}...")
-                        resp = requests.post(
+                        post_telegram_request(
                             photo_url,
-                            data={"chat_id": target_chat_id, "caption": caption, "parse_mode": "HTML"},
+                            {
+                                "chat_id": target_chat_id,
+                                "caption": caption,
+                                "parse_mode": "HTML",
+                            },
                             files={"photo": photo},
-                            timeout=30
                         )
-                        print(f"[DEBUG] Photo response status: {resp.status_code}")
-                        print(f"[DEBUG] Photo response text: {resp.text}")
-                        if resp.status_code != 200:
-                            raise Exception(f"Photo send failed: {resp.text}")
 
                     if len(text_message) <= TELEGRAM_CAPTION_LIMIT:
                         print(f"Telegram chart sent to {target_chat_id} successfully.")
                         success = True
                         break
 
-                # 发送文字（如果需要）
                 for message_part in split_telegram_message(text_message):
-                    print(f"[DEBUG] Sending text to {target_chat_id}...")
-                    resp = requests.post(
+                    post_telegram_request(
                         text_url,
-                        data={"chat_id": target_chat_id, "text": message_part, "parse_mode": "HTML"},
-                        timeout=30
+                        {
+                            "chat_id": target_chat_id,
+                            "text": message_part,
+                            "parse_mode": "HTML",
+                        },
                     )
-                    print(f"[DEBUG] Text response status: {resp.status_code}")
-                    print(f"[DEBUG] Text response text: {resp.text}")
-                    if resp.status_code != 200:
-                        raise Exception(f"Text send failed: {resp.text}")
 
                 print(f"Telegram text sent to {target_chat_id} successfully.")
                 success = True
                 break
 
-            except Exception as error:
+            except requests.RequestException as error:
                 print(f"Telegram send failed to {target_chat_id} on attempt {attempt}/{retries}: {error}")
                 if attempt < retries:
                     time.sleep(backoff_seconds)
@@ -565,14 +497,15 @@ def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
 
     return all_success
 
-    def generate_html(data, date_str):
+
+def generate_html(data, date_str):
     """
-    生成纯 HTML 看板页面，包含所有资产的最新分析数据。
-    输出路径为 docs/index.html，由 GitHub Pages 托管。
+    Generate a pure HTML dashboard page with all assets' latest analysis data.
+    Output path: docs/index.html, hosted by GitHub Pages.
     """
-    html = """<!DOCTYPE html>
-    <html lang="en">
-    <head>
+    html_template = """<!DOCTYPE html>
+<html lang="en">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quant Trade Bot - Daily Dashboard</title>
@@ -642,7 +575,6 @@ def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
         close_price = df["Close"].iloc[-1]
         ma50 = df["MA50"].iloc[-1]
         ma200 = df["MA200"].iloc[-1]
-        rsi = df["RSI"].iloc[-1]
 
         trend_score = calculate_trend_score(close_price, ma50, ma200)
         momentum_score = calculate_momentum_score(df["RSI"])
@@ -652,24 +584,22 @@ def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
             current_momentum_score=momentum_score
         )
 
-        # 生成建议 (这里复用了之前的逻辑，你也可以独立写一个函数)
-        action_text = "⚠️ 数据不足，建议参考趋势和动量分数自行判断。"
+        action_text = "⚠️ Insufficient data. Please refer to Trend and Momentum scores."
+        badge_class = "badge-hold"
+
         if "error" not in historical:
             win_rate = historical["periods"].get(90, {}).get("win_rate", 0)
             if trend_score >= 60 and win_rate >= 75:
-                action_text = "✅ 当前结构历史上胜率较高。若长期定投，可考虑按计划执行或适度加仓。"
+                action_text = "✅ Historically high win rate for this structure. Consider maintaining or slightly increasing your DCA."
                 badge_class = "badge-buy"
             elif trend_score >= 40 and win_rate >= 55:
-                action_text = "⏸️ 当前结构历史胜率中性。维持现有定投节奏，暂不加仓。"
+                action_text = "⏸️ Historically neutral win rate. Maintain your regular DCA pace."
                 badge_class = "badge-hold"
             else:
-                action_text = "⏳ 当前结构历史胜率偏低。可等待更明确信号后再做操作。"
+                action_text = "⏳ Historically low win rate. Consider waiting for a clearer signal."
                 badge_class = "badge-wait"
-        else:
-            badge_class = "badge-hold"
 
-        # 构建卡片
-        html += f"""
+        html_template += f"""
     <div class="card">
         <h2>{info['name']}</h2>
         <div class="row"><span class="label">Latest Close</span><span class="value">{info['symbol']}{close_price:.2f}</span></div>
@@ -681,41 +611,39 @@ def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
     </div>
 """
 
-    html += f"""
+    html_template += f"""
     <div class="footer">
         Updated daily via GitHub Actions · <a href="https://t.me/ETF_Trend_Monitor" target="_blank">Telegram Channel</a> · <a href="https://github.com/kzyxx11/quant_trade_bot" target="_blank">GitHub</a>
     </div>
 </body>
 </html>
 """
-    return html
+    return html_template
+
 
 def main():
-data = fetch_etf_data()
+    data = fetch_etf_data()
     if not data:
         print("No data fetched. Exiting.")
         return
 
-    # 1. 生成并发送 Telegram 消息
-chart_path = generate_chart(data)
-message = build_message(data)
-send_to_telegram(chart_path, message)
+    chart_path = generate_chart(data)
+    message = build_message(data)
+    send_to_telegram(chart_path, message)
 
-    # 2. 生成网页看板 (HTML)
-    from datetime import datetime
+    # Generate web dashboard
     today_str = datetime.now().strftime("%Y-%m-%d %H:%M (GMT+8)")
     html_content = generate_html(data, today_str)
 
-    # 确保 docs 目录存在
     docs_dir = Path("docs")
     docs_dir.mkdir(exist_ok=True)
 
-    # 写入 index.html
     index_path = docs_dir / "index.html"
     with open(index_path, "w", encoding="utf-8") as f:
         f.write(html_content)
 
     print(f"[Success] Dashboard updated at {index_path}")
 
+
 if __name__ == "__main__":
-main()
+    main()
