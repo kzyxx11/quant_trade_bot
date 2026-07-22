@@ -1,4 +1,1 @@
-name = "tg-bot-webhook-bridge"
-main = "quant_trade/track_etf.py"
-compatibility_date = "2024-03-12"
-compatibility_flags = ["python_workers"]
+
