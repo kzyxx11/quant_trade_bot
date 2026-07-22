@@ -30,3 +30,10 @@ jobs:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
         run: python quant_trade/track_etf.py
+
+      - name: Commit and Push Dashboard
+        run: |
+          git config --local user.email "actions@github.com"
+          git config --local user.name "GitHub Actions Bot"
+          git add docs/index.html
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: update dashboard snapshot" && git push)
