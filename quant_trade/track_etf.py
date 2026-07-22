@@ -583,8 +583,10 @@ def generate_trend_chart():
             last = ticker_df.iloc[-1]
             ax.annotate(f"{last['trend_score']:.0f}", 
                        xy=(last["date"], last["trend_score"]),
-                       xytext=(5, 5), textcoords="offset points",
-                       color="#58a6ff", fontsize=10, fontweight="bold")
+                       xytext=(0, 10), 
+                       textcoords="offset points",
+                       color="#58a6ff", fontsize=10, fontweight="bold"),
+                       ha ='center', va='bottom')
         
         ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
         ax.xaxis.set_major_locator(mdates.WeekdayLocator(interval=2))
