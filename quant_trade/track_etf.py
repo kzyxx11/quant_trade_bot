@@ -565,12 +565,157 @@ def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
 
     return all_success
 
+def generate_html(data, date_str):
+    """
+    生成纯 HTML 看板页面，包含所有资产的最新分析数据。
+    输出路径为 docs/index.html，由 GitHub Pages 托管。
+    """
+    html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quant Trade Bot - Daily Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #0d1117;
+            color: #e6edf3;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        h1 { font-size: 24px; font-weight: 600; margin-bottom: 6px; }
+        .subtitle { color: #8b949e; font-size: 14px; margin-bottom: 24px; }
+        .card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 18px 20px;
+            margin-bottom: 20px;
+        }
+        .card h2 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #f0f6fc;
+        }
+        .row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 14px;
+            border-bottom: 1px solid #21262d;
+        }
+        .row:last-child { border-bottom: none; }
+        .label { color: #8b949e; }
+        .value { font-weight: 500; }
+        .badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .badge-buy { background: #1a7f37; color: #fff; }
+        .badge-hold { background: #9e6a03; color: #fff; }
+        .badge-wait { background: #7a2e2e; color: #fff; }
+        .footer {
+            margin-top: 30px;
+            font-size: 13px;
+            color: #8b949e;
+            text-align: center;
+            border-top: 1px solid #21262d;
+            padding-top: 20px;
+        }
+        .footer a { color: #58a6ff; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <h1>📊 Quant Trade Bot</h1>
+    <div class="subtitle">Daily snapshot · {date}</div>
+"""
+
+    for ticker, info in data.items():
+        df = info["df"]
+        close_price = df["Close"].iloc[-1]
+        ma50 = df["MA50"].iloc[-1]
+        ma200 = df["MA200"].iloc[-1]
+        rsi = df["RSI"].iloc[-1]
+
+        trend_score = calculate_trend_score(close_price, ma50, ma200)
+        momentum_score = calculate_momentum_score(df["RSI"])
+        historical = run_historical_analysis(
+            df=info["df_full"],
+            current_trend_score=trend_score,
+            current_momentum_score=momentum_score
+        )
+
+        # 生成建议 (这里复用了之前的逻辑，你也可以独立写一个函数)
+        action_text = "⚠️ 数据不足，建议参考趋势和动量分数自行判断。"
+        if "error" not in historical:
+            win_rate = historical["periods"].get(90, {}).get("win_rate", 0)
+            if trend_score >= 60 and win_rate >= 75:
+                action_text = "✅ 当前结构历史上胜率较高。若长期定投，可考虑按计划执行或适度加仓。"
+                badge_class = "badge-buy"
+            elif trend_score >= 40 and win_rate >= 55:
+                action_text = "⏸️ 当前结构历史胜率中性。维持现有定投节奏，暂不加仓。"
+                badge_class = "badge-hold"
+            else:
+                action_text = "⏳ 当前结构历史胜率偏低。可等待更明确信号后再做操作。"
+                badge_class = "badge-wait"
+        else:
+            badge_class = "badge-hold"
+
+        # 构建卡片
+        html += f"""
+    <div class="card">
+        <h2>{info['name']}</h2>
+        <div class="row"><span class="label">Latest Close</span><span class="value">{info['symbol']}{close_price:.2f}</span></div>
+        <div class="row"><span class="label">Trend Score</span><span class="value">{trend_score}/100</span></div>
+        <div class="row"><span class="label">Momentum Score</span><span class="value">{momentum_score}/100</span></div>
+        <div class="row"><span class="label">Historical Match</span><span class="value">{historical.get('match_count', 'N/A')} occurrences</span></div>
+        <div class="row"><span class="label">90-day Win Rate</span><span class="value">{historical.get('periods', {}).get(90, {}).get('win_rate', 'N/A')}%</span></div>
+        <div class="row"><span class="label">Suggested Action</span><span class="value"><span class="badge {badge_class}">{action_text}</span></span></div>
+    </div>
+"""
+
+    html += f"""
+    <div class="footer">
+        Updated daily via GitHub Actions · <a href="https://t.me/ETF_Trend_Monitor" target="_blank">Telegram Channel</a> · <a href="https://github.com/kzyxx11/quant_trade_bot" target="_blank">GitHub</a>
+    </div>
+</body>
+</html>
+"""
+    return html
+
 def main():
     data = fetch_etf_data()
+    if not data:
+        print("No data fetched. Exiting.")
+        return
+
+    # 1. 生成并发送 Telegram 消息
     chart_path = generate_chart(data)
     message = build_message(data)
     send_to_telegram(chart_path, message)
 
+    # 2. 生成网页看板 (HTML)
+    from datetime import datetime
+    today_str = datetime.now().strftime("%Y-%m-%d %H:%M (GMT+8)")
+    html_content = generate_html(data, today_str)
+
+    # 确保 docs 目录存在
+    docs_dir = Path("docs")
+    docs_dir.mkdir(exist_ok=True)
+
+    # 写入 index.html
+    index_path = docs_dir / "index.html"
+    with open(index_path, "w", encoding="utf-8") as f:
+        f.write(html_content)
+
+    print(f"[Success] Dashboard updated at {index_path}")
 
 if __name__ == "__main__":
     main()
