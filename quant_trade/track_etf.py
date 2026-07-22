@@ -653,20 +653,20 @@ def generate_html(data, date_str):
         )
 
         # 生成建议 (这里复用了之前的逻辑，你也可以独立写一个函数)
-        action_text = "⚠️ 数据不足，建议参考趋势和动量分数自行判断。"
+        action_text = "⚠️ Insufficient data. Please refer to Trend and Momentum scores."
+        badge_class = "badge-hold"
+
         if "error" not in historical:
             win_rate = historical["periods"].get(90, {}).get("win_rate", 0)
             if trend_score >= 60 and win_rate >= 75:
-                action_text = "✅ 当前结构历史上胜率较高。若长期定投，可考虑按计划执行或适度加仓。"
+                action_text = "✅ Historically high win rate for this structure. Consider maintaining or slightly increasing your DCA."
                 badge_class = "badge-buy"
             elif trend_score >= 40 and win_rate >= 55:
-                action_text = "⏸️ 当前结构历史胜率中性。维持现有定投节奏，暂不加仓。"
+                action_text = "⏸️ Historically neutral win rate. Maintain your regular DCA pace."
                 badge_class = "badge-hold"
             else:
-                action_text = "⏳ 当前结构历史胜率偏低。可等待更明确信号后再做操作。"
+                action_text = "⏳ Historically low win rate. Consider waiting for a clearer signal."
                 badge_class = "badge-wait"
-        else:
-            badge_class = "badge-hold"
 
         # 构建卡片
         html += f"""
