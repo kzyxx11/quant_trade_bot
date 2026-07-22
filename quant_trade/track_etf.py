@@ -564,8 +564,6 @@ def generate_trend_chart():
     
     for ticker in tickers:
         ticker_df = df[df["ticker"] == ticker].sort_values("date")
-        
-        # 只保留最近 30 天的数据，让图表更清晰
         ticker_df = ticker_df.tail(30)
         
         fig, ax = plt.subplots(figsize=(10, 3))
@@ -573,7 +571,11 @@ def generate_trend_chart():
         ax.axhline(y=50, color="#8b949e", linestyle="--", linewidth=0.8, alpha=0.5)
         ax.set_title(f"{ticker} - Trend Score Over Time", fontsize=10, color="#e6edf3")
         ax.set_ylabel("Trend Score", color="#8b949e")
-        ax.set_ylim(0, 105)  # 给标注留空间
+        
+        # 强制固定 y 轴范围，禁止自动调整
+        ax.set_ylim(0, 110)
+        ax.set_autoscale_on(False)
+        
         ax.grid(True, alpha=0.1, color="#30363d")
         ax.legend(loc="lower left")
         
@@ -589,7 +591,6 @@ def generate_trend_chart():
         plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
         
         plt.tight_layout()
-        # 保存为按 ticker 命名的独立图片
         chart_path = Path(f"docs/trend_{ticker}.png")
         plt.savefig(chart_path, dpi=150, facecolor='#0d1117', edgecolor='none')
         plt.close()
