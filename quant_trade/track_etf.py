@@ -665,8 +665,8 @@ def generate_html(data, date_str):
             else:
                 action_text = "⏳ 当前结构历史胜率偏低。可等待更明确信号后再做操作。"
                 badge_class = "badge-wait"
-            else:
-                badge_class = "badge-hold"
+        else:
+            badge_class = "badge-hold"
 
         # 构建卡片
         html += f"""
