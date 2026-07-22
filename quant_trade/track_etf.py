@@ -609,13 +609,14 @@ def generate_html(data, date_str):
         <div class="row"><span class="label">Momentum Score</span><span class="value">{momentum_score}/100</span></div>
         <div class="row"><span class="label">Historical Match</span><span class="value">{historical.get('match_count', 'N/A')} occurrences</span></div>
         <div class="row"><span class="label">90-day Win Rate</span><span class="value">{historical.get('periods', {}).get(90, {}).get('win_rate', 'N/A')}%</span></div>
+        <div class="row"><span class="label">Historical Match</span><span class="value">{historical.get('match_count', 'N/A')} occurrences</span></div>
         <div class="row"><span class="label">Suggested Action</span><span class="value"><span class="badge {badge_class}">{action_text}</span></span></div>
     </div>
 """
 
     html_template += f"""
     <div class="footer">
-        Updated daily via GitHub Actions · <a href="https://t.me/ETF_Trend_Monitor" target="_blank">Telegram Channel</a> · <a href="https://github.com/kzyxx11/quant_trade_bot" target="_blank">GitHub</a>
+        Updated: {date} · <a href="https://t.me/ETF_Trend_Monitor" target="_blank">Telegram Channel</a> · <a href="https://github.com/kzyxx11/quant_trade_bot" target="_blank">GitHub</a>
     </div>
 </body>
 </html>
