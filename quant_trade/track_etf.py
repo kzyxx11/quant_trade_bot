@@ -406,13 +406,23 @@ def generate_chart(data):
         momentum_color = "🟢" if momentum_score >= 50 else ("🟠" if momentum_score >= 30 else "🔴")
         risk_color = "🟢" if risk == "Low" else ("🟠" if risk == "Moderate" else "🔴")
 
-        # 组装信息文本
-        info_text = (
-            f"{trend_color} Trend: {trend_score}/100\n"
-            f"{momentum_color} Momentum: {momentum_score}/100\n"
-            f"{risk_color} Risk: {risk}\n"
-            f"📈 Regime: {regime}"
-        )
+        # 定义颜色缩写
+def color_abbr(score, type='score'):
+    if type == 'score':
+        if score >= 70: return "(G)"
+        elif score >= 50: return "(Y)"
+        else: return "(R)"
+    else:  # risk
+        if score == "Low": return "(G)"
+        elif score == "Moderate": return "(Y)"
+        else: return "(R)"
+
+info_text = (
+    f"{color_abbr(trend_score)} Trend: {trend_score}/100\n"
+    f"{color_abbr(momentum_score)} Momentum: {momentum_score}/100\n"
+    f"{color_abbr(risk, 'risk')} Risk: {risk}\n"
+    f"Regime: {regime}"
+)
 
         # ========== 绘图部分 ==========
         main_ax.plot(df.index, df["Close"], color="#ffffff", linewidth=1.5, label="Spot Price", alpha=0.9)
