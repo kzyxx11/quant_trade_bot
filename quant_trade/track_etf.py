@@ -568,6 +568,7 @@ def build_scene_1_message(data, date_str, time_ago_str):
             match_text = "<b>📚 Historical Match</b>\nInsufficient data"
         # 组装单个资产块
         block = f"""━━━━━━━━━━━━
+        
 <b>📈 {asset_name}</b>
 
 {trend_color} Trend: {trend_score}/100
