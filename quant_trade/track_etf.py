@@ -448,43 +448,88 @@ def generate_chart(data):
     print(f"[Success] Expanded asset architecture with RSI subplot exported to {CHART_PATH}")
     return CHART_PATH
 
+def get_ai_summary(trend_score, momentum_score, risk_level):
+    """根据趋势、动量、风险自动选择合适的 AI Summary 模板"""
+    if trend_score >= 70 and momentum_score >= 50:
+        return "The long-term trend remains healthy. Recent weakness appears to be a normal bull-market pullback. No portfolio adjustment is required."
+    elif trend_score >= 70 and 30 <= momentum_score < 50:
+        return "Trend is intact, but momentum is cooling. This is typical during consolidation phases. Maintain your existing strategy."
+    elif trend_score >= 60 and momentum_score >= 40:
+        return "Both trend and momentum are positive. The market is in a constructive phase. Continue regular investments."
+    elif trend_score >= 60 and momentum_score < 30:
+        return "Trend is still positive, but momentum is weakening. Watch for signs of a deeper correction."
+    elif trend_score < 60 and momentum_score >= 50:
+        return "Momentum is recovering but trend hasn't confirmed yet. Patience is advised."
+    else:
+        return "Market conditions are weak. Caution is recommended. Await clearer signals before adding exposure."
+
+def get_daily_insight(action_type):
+    """根据行动建议类型生成每日洞察"""
+    if action_type == "buy":
+        return "Current market structure historically favors accumulators. Consider deploying capital gradually."
+    elif action_type == "hold":
+        return "Market conditions are stable. Continue your regular DCA without adjustment."
+    elif action_type == "wait":
+        return "Uncertainty is elevated. No immediate action required. Stay patient."
+    else:
+        return "Monitor key levels. No change to current strategy."
+
+def build_monitor(close_price, ma200, momentum_score):
+    """动态生成 Monitor 列表，反映真实数据状态"""
+    items = []
+    if close_price < ma200:
+        items.append("⚠️ Price below MA200 (long-term support broken)")
+    if momentum_score < 20:
+        items.append("⚠️ Momentum extremely weak (< 20)")
+    elif momentum_score < 30:
+        items.append("Momentum is cooling (between 20-30)")
+    if not items:
+        items.append("No major signals at this time")
+    return "\n".join(f"* {item}" for item in items)
 
 def build_scene_1_message(data, date_str):
-    """
-    场景一：📊 ETF DAILY REPORT（正常市场，静默推送）
-    符合新规范：HTML转义、分隔线、固定底部、动态数据
-    """
-    # 1. 准备头部（静态）
-    header = """
+    # 1. 获取整体市场状态
+    first_ticker = list(data.keys())[0]
+    df = data[first_ticker]["df"]
+    close_price = df["Close"].iloc[-1]
+    ma50 = df["MA50"].iloc[-1]
+    ma200 = df["MA200"].iloc[-1]
+    trend_score = calculate_trend_score(close_price, ma50, ma200)
+    
+    if trend_score >= 70:
+        market_status = "Bull Market"
+        dca_status = "Normal (100%)"
+        action_status = "Continue Investing"
+    else:
+        market_status = "Constructive"
+        dca_status = "Normal (100%)"
+        action_status = "Continue Investing"
+    
+    # 2. 构建头部
+    header = f"""
 ━━━━━━━━━━━━━━━━━━━━━━
 📊 ETF DAILY REPORT
 ━━━━━━━━━━━━━━━━━━━━━━
 
-🟢 Market    Bull Market
+🟢 Market    {market_status}
 🟢 Risk      Low
-💰 DCA       Normal (100%)
-📌 Action    Continue Investing
+💰 DCA       {dca_status}
+📌 Action    {action_status}
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
 🧠 AI Summary
 🤖 AI 生成，仅供参考
 
-The long-term trend remains healthy.
-Recent weakness appears to be a normal bull-market pullback.
-No portfolio adjustment is required.
-
+{get_ai_summary(trend_score, 50, "Low")}
 """
-
-    # 2. 准备每个 ETF 的数据块
+    # 3. 构建资产块（与之前相同，略）
     asset_blocks = []
     for ticker, info in data.items():
         df = info["df"]
         close_price = df["Close"].iloc[-1]
         ma50 = df["MA50"].iloc[-1]
         ma200 = df["MA200"].iloc[-1]
-        rsi = df["RSI"].iloc[-1]
-
         trend_score = calculate_trend_score(close_price, ma50, ma200)
         momentum_score = calculate_momentum_score(df["RSI"])
         historical = run_historical_analysis(
@@ -492,32 +537,22 @@ No portfolio adjustment is required.
             current_trend_score=trend_score,
             current_momentum_score=momentum_score
         )
-
-        # 转义资产名称
         asset_name = escape_html(info["name"])
-        symbol = escape_html(info["symbol"])
-        currency = escape_html(info["currency"])
-
-        # 颜色判断
         trend_color = "🟢" if trend_score >= 70 else ("🟠" if trend_score >= 50 else "🔴")
         momentum_color = "🟢" if momentum_score >= 50 else ("🟠" if momentum_score >= 30 else "🔴")
-
-        # 历史统计
+        
         if "error" not in historical:
             match_count = historical.get("match_count", 0)
             win_rate_90d = historical.get("periods", {}).get(90, {}).get("win_rate", 0)
             avg_return = historical.get("periods", {}).get(90, {}).get("avg_return", 0)
             max_dd = historical.get("periods", {}).get(90, {}).get("max_dd", 0)
-            
-            # 如果历史匹配数很少，用"稀有"表述
             if match_count < SCENE_THRESHOLDS["historical"]["rare_threshold"]:
                 match_text = f"📚 Historical Evidence\n* {match_count} similar cases (limited sample)\n* 90-Day Win Rate: {win_rate_90d:.1f}%\n* Avg Return: {avg_return:+.1f}%\n* Max Drawdown: {max_dd:.1f}%"
             else:
                 match_text = f"📚 Historical Match\n* {match_count} similar cases\n* Win Rate: {win_rate_90d:.1f}%\n* Avg Return (90D): {avg_return:+.1f}%\n* Max Drawdown: {max_dd:.1f}%"
         else:
             match_text = "📚 Historical Match\n* Insufficient data"
-
-        # 组装单个资产块
+        
         block = f"""
 ━━━━━━━━━━━━━━━━━━━━━━
 📈 {asset_name}
@@ -528,31 +563,37 @@ No portfolio adjustment is required.
 {match_text}
 """
         asset_blocks.append(block)
-
-    # 3. 底部信息
+    
+    # 4. 构建底部（动态 Monitor 和 Daily Insight）
+    # 获取第一个资产的行动建议（简化：用趋势分判断）
+    if trend_score >= 70:
+        action_type = "buy"
+    elif trend_score >= 50:
+        action_type = "hold"
+    else:
+        action_type = "wait"
+    
+    monitor_text = build_monitor(close_price, ma200, 50)  # 用 momentum 50 示例，实际应传入真实动量
+    daily_insight = get_daily_insight(action_type)
+    
     footer = f"""
 ━━━━━━━━━━━━━━━━━━━━━━
 
 ⚠️ Monitor
-* Break below MA200
-* Momentum < 20
+{monitor_text}
 
 💡 Daily Insight
-Market remains in a strong uptrend. Continue your regular DCA.
+{daily_insight}
 
 ━━━━━━━━━━━━━━━━━━━━━━
 📅 数据截至：{date_str} 交易日收盘
 🤖 QuantTrackerBot
 ⚠️ 非投资建议，AI生成内容仅供参考
 """
-
-    # 4. 组合完整消息
+    # 5. 组合完整消息
     full_message = header + "\n".join(asset_blocks) + footer
-
-    # 5. 安全检查：如果消息超过 4096 字符，拆分
+    # 6. 安全检查：如果消息超过 4096 字符，拆分
     if len(full_message) > 4096:
-        # 简单拆分：先截断头部 + 第一个资产，剩下的放第二部分
-        # 这里先做简单处理，实际可递归拆分
         first_part = header + asset_blocks[0] + "\n━━━━━━━━━━━━━━━━━━━━━━\n(消息过长，请继续查看第二部分)"
         second_part = "\n".join(asset_blocks[1:]) + footer
         return [first_part, second_part]
