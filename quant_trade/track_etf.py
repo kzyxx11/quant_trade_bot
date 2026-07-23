@@ -13,6 +13,17 @@ TELEGRAM_TOKEN = os.getenv("TG_BOT_TOKEN")
 CHAT_ID = os.getenv("TG_CHAT_ID")
 
 # ============================================================
+# MESSAGE 1 - LOADING STEPS
+# ============================================================
+LOADING_STEPS = [
+    {"label": "Loading market data...", "eta": 40},
+    {"label": "Matching historical patterns...", "eta": 30},
+    {"label": "Calculating trend & momentum...", "eta": 20},
+    {"label": "Generating institutional report...", "eta": 10},
+    {"label": "Finalizing...", "eta": 5},
+]
+
+# ============================================================
 # NEW REPORT SYSTEM - CONFIGURATION & SCENE ENGINE
 # ============================================================
 
@@ -696,7 +707,38 @@ def split_telegram_message(text, limit=3900):
         chunks.append("\n\n".join(current))
 
     return chunks
+    
+def edit_loading_message(chat_id, message_id, step_index, error=None):
+    """
+    编辑已有的加载消息（Message 1），更新步骤和 ETA。
+    如果 error 不为空，显示错误信息并终止。
+    """
+    if not chat_id or not message_id:
+        # 如果没有 message_id，跳过编辑（向后兼容）
+        return
 
+    token = TELEGRAM_TOKEN
+    if not token:
+        return
+
+    if error:
+        text = f"❌ Engine Exception: {error}\nPlease try again later."
+    else:
+        step = LOADING_STEPS[step_index] if step_index < len(LOADING_STEPS) else LOADING_STEPS[-1]
+        text = f"⚙️ Quant Engine Activated...\n{step['label']}\n⏳ ETA: ~{step['eta']}s"
+
+    url = f"https://api.telegram.org/bot{token}/editMessageText"
+    try:
+        resp = requests.post(url, json={
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "text": text,
+            "parse_mode": "Markdown"
+        }, timeout=10)
+        if resp.status_code != 200:
+            print(f"[EditMessage] Failed: {resp.status_code} - {resp.text}")
+    except Exception as e:
+        print(f"[EditMessage] Exception: {e}")
 
 def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
     if not TELEGRAM_TOKEN or not CHAT_ID:
@@ -987,48 +1029,81 @@ def generate_html(data, date_str):
     return html_template
     
 def main():
+# 读取可能从 Worker 传来的 message_id
+    message_id = os.getenv("MESSAGE_ID")
+    chat_id_from_payload = os.getenv("CHAT_ID_FROM_PAYLOAD")
+    
+    # 如果 payload 中有 chat_id，优先使用（覆盖环境变量）
+    if chat_id_from_payload:
+        chat_id_for_edit = chat_id_from_payload
+    else:
+        chat_id_for_edit = CHAT_ID  # 回退到默认私聊
+
+    try:
+        # 步骤0：开始
+        edit_loading_message(chat_id_for_edit, message_id, 0)
+    
     data = fetch_etf_data()
     if not data:
         print("No data fetched. Exiting.")
+        edit_loading_message(chat_id_for_edit, message_id, error="No data from Yahoo Finance.")
         return
 
+    # 步骤1：数据加载完成
+    edit_loading_message(chat_id_for_edit, message_id, 1)
+
     tz_gmt8 = timezone(timedelta(hours=8))
-    now = datetime.now(tz_gmt8)
-    today_str = now.strftime("%Y-%m-%d")
+    today_str = datetime.now(tz_gmt8).strftime("%Y-%m-%d")
     append_history(data, today_str)
+
+    # 步骤2：历史匹配
+    edit_loading_message(chat_id_for_edit, message_id, 2)
     
     generate_trend_chart()
+    
+    # 步骤3：生成图表
+    edit_loading_message(chat_id_for_edit, message_id, 3)
+
     chart_path = generate_chart(data)
-    
-    # 计算相对时间
-    run_timestamp = now
 
-    # 这里我们将运行时间戳保存，后面生成消息时计算差值
-    # 为了简单，我们直接将当前时间作为相对基准，但实际应该用同一个时间
-    display_date = now.strftime("%Y-%m-%d %H:%M")  # 保留旧格式备用
+    # 步骤4：生成报告
+    edit_loading_message(chat_id_for_edit, message_id, 4)
     
-    # 生成相对时间字符串（Just now / X min ago）
-    # 这里我们假设从脚本开始到发送消息时间很短，所以直接设为 "Just now"
-    # 但如果你希望更精确，可以记录 start_time
-    time_ago = "Just now"  # 后续可改为真实差值
-
-    # 生成场景一消息
-    messages = build_scene_1_message(data, display_date, time_ago)
+    display_date = datetime.now(tz_gmt8).strftime("%Y-%m-%d %H:%M")
+    messages = build_scene_1_message(data, display_date, "Just now")
     for idx, msg in enumerate(messages):
         if idx == 0:
             send_to_telegram(chart_path, msg)
         else:
             send_to_telegram(None, msg)
 
-    # 网页看板生成（不变）
-    today_str_full = now.strftime("%Y-%m-%d %H:%M (GMT+8)")
-    html_content = generate_html(data, today_str_full)
+    # 完成：编辑加载消息为完成状态（可选）
+    final_text = "✅ Report generated successfully."
+    if message_id and chat_id_for_edit:
+        edit_loading_message(chat_id_for_edit, message_id, error=None)
+        # 直接发送完成消息（或编辑成完成状态）
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/editMessageText"
+        requests.post(url, json={
+            "chat_id": chat_id_for_edit,
+            "message_id": message_id,
+            "text": "✅ Report ready. Check the full analysis above.",
+            "parse_mode": "Markdown"
+        })
+    
+    # 网页看板生成（可选）
+    html_content = generate_html(data, datetime.now(tz_gmt8).strftime("%Y-%m-%d %H:%M (GMT+8)"))
     docs_dir = Path("docs")
     docs_dir.mkdir(exist_ok=True)
-    index_path = docs_dir / "index.html"
-    with open(index_path, "w", encoding="utf-8") as f:
+    with open(docs_dir / "index.html", "w", encoding="utf-8") as f:
         f.write(html_content)
-    print(f"[Success] Dashboard updated at {index_path}")
+    print("[Success] Dashboard updated.")
+
+except Exception as e:
+    # 异常捕获：编辑加载消息显示错误
+    error_msg = str(e)[:200]  # 限制长度
+    edit_loading_message(chat_id_for_edit, message_id, error=error_msg)
+    print(f"[Fatal Error] {e}")
+    raise  # 可选：重新抛出以便 Actions 标记失败
 
 if __name__ == "__main__":
     main()
