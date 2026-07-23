@@ -679,6 +679,160 @@ RSI (14): {rsi:.1f}
     else:
         return [full_message]
 
+def build_scene_2_message(data, date_str, time_ago_str, changes):
+    """
+    场景二：⚠️ MARKET UPDATE（黄色系，注意感）
+    包含 What's Changed 区块，用于显示较前一日的变化
+    changes: dict，包含前一天和当天的关键指标对比
+             例如 {'trend': (80, 75), 'momentum': (45, 30), 'risk': ('Low', 'Moderate')}
+    """
+    # 1. 获取整体市场状态（取第一个资产作为代表）
+    first_ticker = list(data.keys())[0]
+    df_first = data[first_ticker]["df"]
+    close_first = df_first["Close"].iloc[-1]
+    ma50_first = df_first["MA50"].iloc[-1]
+    ma200_first = df_first["MA200"].iloc[-1]
+    trend_score_first = calculate_trend_score(close_first, ma50_first, ma200_first)
+    
+    if trend_score_first >= 70:
+        market_status = "Bull Market"
+        dca_status = "Normal (100%)"
+        action_status = "Continue Investing"
+        action_type = "hold"  # 场景二通常建议观望
+    elif trend_score_first >= 50:
+        market_status = "Constructive"
+        dca_status = "Normal (100%)"
+        action_status = "Continue Investing"
+        action_type = "hold"
+    else:
+        market_status = "Correction / Bear Market"
+        dca_status = "Reduce (50-75%)"
+        action_status = "Stay Patient"
+        action_type = "wait"
+    
+    # 2. 构建头部（黄色系标题）
+    header = f"""
+━━━━━━━━━━━━
+⚠️ <b>MARKET UPDATE</b>
+━━━━━━━━━━━━
+
+🟡 <b>Market:</b> {market_status}
+🟡 <b>Risk:</b> {changes.get('risk', ('Unknown', 'Unknown'))[1]}  # 使用最新风险
+💰 <b>DCA:</b> {dca_status}
+📌 <b>Action:</b> {action_status}
+
+━━━━━━━━━━━━
+"""
+    
+    # 3. What's Changed? 区块
+    change_lines = []
+    if changes:
+        if 'trend' in changes:
+            old, new = changes['trend']
+            change_lines.append(f"* Trend: {old} → {new}")
+        if 'momentum' in changes:
+            old, new = changes['momentum']
+            change_lines.append(f"* Momentum: {old} → {new}")
+        if 'risk' in changes:
+            old, new = changes['risk']
+            change_lines.append(f"* Risk: {old} → {new}")
+        if 'regime' in changes:
+            old, new = changes['regime']
+            change_lines.append(f"* Market Regime: {old} → {new}")
+    
+    if change_lines:
+        changes_block = "🆕 <b>What's Changed?</b>\n" + "\n".join(change_lines)
+    else:
+        changes_block = "🆕 <b>What's Changed?</b>\nNo significant changes detected."
+    
+    header += changes_block + "\n━━━━━━━━━━━━\n"
+    
+    # 4. AI Summary（场景二风格）
+    ai_summary = f"""
+<b>🧠 AI Summary</b>
+🤖 AI-generated, for reference only
+
+Momentum has weakened noticeably.
+However, both ETFs remain above their 200-day moving average.
+No action is recommended at this stage.
+"""
+    header += ai_summary
+    
+    # 5. 资产数据块（与场景一相同，但可以去掉Historical Match的详细说明，只保留核心数据）
+    asset_blocks = []
+    for ticker, info in data.items():
+        df = info["df"]
+        close_price = df["Close"].iloc[-1]
+        ma50 = df["MA50"].iloc[-1]
+        ma200 = df["MA200"].iloc[-1]
+        rsi = df["RSI"].iloc[-1]
+        
+        trend_score = calculate_trend_score(close_price, ma50, ma200)
+        momentum_score = calculate_momentum_score(df["RSI"])
+        historical = run_historical_analysis(
+            df=info["df_full"],
+            current_trend_score=trend_score,
+            current_momentum_score=momentum_score
+        )
+        asset_name = escape_html(info["name"])
+        symbol = escape_html(info["symbol"])
+        
+        trend_color = "🟢" if trend_score >= 70 else ("🟠" if trend_score >= 50 else "🔴")
+        momentum_color = "🟢" if momentum_score >= 50 else ("🟠" if momentum_score >= 30 else "🔴")
+        
+        # 历史统计（场景二仍使用 Historical Match）
+        if "error" not in historical:
+            match_count = historical.get("match_count", 0)
+            win_rate_90d = historical.get("periods", {}).get(90, {}).get("win_rate", 0)
+            avg_return = historical.get("periods", {}).get(90, {}).get("avg_return", 0)
+            max_dd = historical.get("periods", {}).get(90, {}).get("max_dd", 0)
+            match_text = f"<b>📚 Historical Match</b>\n<i>(15-year comparison)</i>\n{match_count} similar cases\nWin Rate: {win_rate_90d:.1f}%\nAvg Return (90D): {avg_return:+.1f}%\nMax Drawdown: {max_dd:.1f}%"
+        else:
+            match_text = "<b>📚 Historical Match</b>\nInsufficient data"
+        
+        block = f"""
+━━━━━━━━━━━━
+<b>📈 {asset_name}</b>
+
+{trend_color} <b>Trend:</b> {trend_score}/100
+{momentum_color} <b>Momentum:</b> {momentum_score}/100
+
+<b>Latest Price:</b> {symbol}{close_price:.2f}
+<b>MA50:</b> {symbol}{ma50:.2f}
+<b>MA200:</b> {symbol}{ma200:.2f}
+<b>RSI (14):</b> {rsi:.1f}
+
+{match_text}
+"""
+        asset_blocks.append(block)
+    
+    # 6. 底部（Monitor 和 Daily Insight 同场景一，但可以强调关注点）
+    monitor_text = build_monitor(close_first, ma200_first, 50)  # 复用
+    daily_insight = "Conditions are changing. Maintain flexibility and avoid large new positions."
+    
+    footer = f"""
+━━━━━━━━━━━━
+
+<b>⚠️ Monitor</b>
+{monitor_text}
+
+<b>💡 Daily Insight</b>
+{daily_insight}
+
+━━━━━━━━━━━━
+📅 <b>Data as of:</b> {time_ago_str}
+🤖 QuantTrackerBot
+⚠️ Not financial advice. AI-generated content for reference.
+"""
+    
+    full_message = header + "\n".join(asset_blocks) + footer
+    if len(full_message) > 4096:
+        first_part = header + asset_blocks[0] + "\n━━━━━━━━━━━━\n(Message continues below)"
+        second_part = "\n".join(asset_blocks[1:]) + footer
+        return [first_part, second_part]
+    else:
+        return [full_message]
+
 def post_telegram_request(url, payload, files=None):
     response = requests.post(url, data=payload, files=files, timeout=30)
     response.raise_for_status()
@@ -1058,11 +1212,10 @@ def main():
     message_id = os.getenv("MESSAGE_ID")
     chat_id_from_payload = os.getenv("CHAT_ID_FROM_PAYLOAD")
 
-    # 如果 payload 中有 chat_id，优先使用（覆盖环境变量）
     if chat_id_from_payload:
         chat_id_for_edit = chat_id_from_payload
     else:
-        chat_id_for_edit = CHAT_ID  # 回退到默认私聊
+        chat_id_for_edit = CHAT_ID
 
     try:
         # 步骤0：开始
@@ -1094,15 +1247,81 @@ def main():
         # 步骤4：生成报告
         edit_loading_message(chat_id_for_edit, message_id, 4)
 
+        # ============================================================
+        # 📌 场景判定 + 消息分发（替换原来的 build_scene_1_message 调用）
+        # ============================================================
+        # 从第一个资产获取数据用于场景判定
+        first_ticker = list(data.keys())[0]
+        df_first = data[first_ticker]["df"]
+        close_first = df_first["Close"].iloc[-1]
+        ma50_first = df_first["MA50"].iloc[-1]
+        ma200_first = df_first["MA200"].iloc[-1]
+        trend_score_first = calculate_trend_score(close_first, ma50_first, ma200_first)
+        momentum_score_first = calculate_momentum_score(df_first["RSI"])
+
+        # 计算风险等级
+        if trend_score_first >= 70:
+            risk_level = "Low"
+        elif trend_score_first >= 50:
+            risk_level = "Moderate"
+        else:
+            risk_level = "High"
+
+        # 获取历史匹配次数（用于场景判定）
+        historical_first = run_historical_analysis(
+            df=data[first_ticker]["df_full"],
+            current_trend_score=trend_score_first,
+            current_momentum_score=momentum_score_first
+        )
+        match_count = historical_first.get("match_count", 100)
+
+        # 场景判定
+        scene_key, _ = _determine_scene(trend_score_first, momentum_score_first, risk_level, match_count)
+        print(f"[Scene] Determined scene: {scene_key}")
+
+        # 获取前一天数据（用于场景二的变化检测）
+        import pandas as pd
+        history_path = Path("docs/history.csv")
+        prev_changes = {}
+        if history_path.exists():
+            try:
+                df_hist = pd.read_csv(history_path)
+                df_hist['date'] = pd.to_datetime(df_hist['date'])
+                today_date = datetime.now(tz_gmt8).date()
+                df_prev = df_hist[df_hist['date'].dt.date < today_date]
+                if not df_prev.empty:
+                    last_row = df_prev.iloc[-1]
+                    prev_changes = {
+                        'trend': (last_row['trend_score'], trend_score_first),
+                        'momentum': (last_row['momentum_score'], momentum_score_first),
+                        'risk': (risk_level, risk_level)
+                    }
+            except Exception as e:
+                print(f"[Scene] Could not read history for changes: {e}")
+
+        # 根据场景选择消息构建函数
         display_date = datetime.now(tz_gmt8).strftime("%Y-%m-%d %H:%M")
-        messages = build_scene_1_message(data, display_date, "Just now")
+        time_ago = "Just now"
+
+        if scene_key == "SCENE_1":
+            messages = build_scene_1_message(data, display_date, time_ago)
+        elif scene_key == "SCENE_2":
+            messages = build_scene_2_message(data, display_date, time_ago, prev_changes)
+        else:
+            # 场景三/四暂用场景二作为占位（后续补充）
+            messages = build_scene_2_message(data, display_date, time_ago, prev_changes)
+            print(f"[Scene] {scene_key} not fully implemented, using SCENE_2 as fallback.")
+
+        # 发送所有消息段
         for idx, msg in enumerate(messages):
             if idx == 0:
                 send_to_telegram(chart_path, msg)
             else:
                 send_to_telegram(None, msg)
 
-        # 完成：编辑加载消息为完成状态
+        # ============================================================
+        # 📌 完成加载消息编辑
+        # ============================================================
         if message_id and chat_id_for_edit:
             url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/editMessageText"
             try:
@@ -1124,11 +1343,10 @@ def main():
         print("[Success] Dashboard updated.")
 
     except Exception as e:
-        # 异常捕获：编辑加载消息显示错误
-        error_msg = str(e)[:200]  # 限制长度
+        error_msg = str(e)[:200]
         edit_loading_message(chat_id_for_edit, message_id, error=error_msg)
         print(f"[Fatal Error] {e}")
-        raise  # 可选：重新抛出以便 Actions 标记失败
+        raise
 
 if __name__ == "__main__":
     main()
