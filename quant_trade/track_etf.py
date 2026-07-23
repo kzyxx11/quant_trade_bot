@@ -754,6 +754,7 @@ def build_scene_2_message(data, date_str, time_ago_str, changes):
 Momentum has weakened noticeably.
 However, both ETFs remain above their 200-day moving average.
 No action is recommended at this stage.
+
 """
     header += ai_summary
     
@@ -796,10 +797,11 @@ No action is recommended at this stage.
 {trend_color} <b>Trend:</b> {trend_score}/100
 {momentum_color} <b>Momentum:</b> {momentum_score}/100
 
-<b>Latest Price:</b> {symbol}{close_price:.2f}
-<b>MA50:</b> {symbol}{ma50:.2f}
-<b>MA200:</b> {symbol}{ma200:.2f}
-<b>RSI (14):</b> {rsi:.1f}
+<b>📊 Latest Price:</b> {symbol}{close_price:.2f}
+
+MA50: {symbol}{ma50:.2f}
+MA200: {symbol}{ma200:.2f}
+RSI (14): {rsi:.1f}
 
 {match_text}
 """
@@ -820,10 +822,8 @@ No action is recommended at this stage.
 
 ━━━━━━━━━━━━
 
-
 📅 Data as of: {time_ago_str}
 🤖 QuantTrackerBot
-
 
 <i>This content is for informational purposes only. It does not constitute financial or investment advice.</i>
 """
