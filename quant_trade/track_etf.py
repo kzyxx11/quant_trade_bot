@@ -710,23 +710,48 @@ def split_telegram_message(text, limit=3900):
     
 def edit_loading_message(chat_id, message_id, step_index, error=None):
     """
-    编辑已有的加载消息（Message 1），更新步骤和 ETA。
-    如果 error 不为空，显示错误信息并终止。
+    编辑加载消息，累积显示所有步骤的进度。
+    step_index: 当前完成的步骤索引（0-based）
+    例如 step_index=1 表示第0步和第1步已完成，其余未完成
     """
     if not chat_id or not message_id:
-        # 如果没有 message_id，跳过编辑（向后兼容）
         return
 
     token = TELEGRAM_TOKEN
     if not token:
         return
 
+    # 定义所有步骤（与 LOADING_STEPS 对应）
+    steps = [
+        "Loading market data...",
+        "Matching historical patterns...",
+        "Calculating trend & momentum...",
+        "Generating institutional report...",
+        "Finalizing..."
+    ]
+
+    # 如果出错，显示错误信息
     if error:
         text = f"❌ Engine Exception: {error}\nPlease try again later."
     else:
-        step = LOADING_STEPS[step_index] if step_index < len(LOADING_STEPS) else LOADING_STEPS[-1]
-        text = f"⚙️ Quant Engine Activated...\n{step['label']}\n⏳ ETA: ~{step['eta']}s"
+        # 构建进度文本
+        lines = ["⚙️ Quant Engine Activated..."]
+        for i, step in enumerate(steps):
+            if i <= step_index:
+                lines.append(f"✅ {step}")
+            else:
+                lines.append(f"⏳ {step}")
+        
+        # 添加 ETA（如果还有未完成的步骤）
+        if step_index < len(LOADING_STEPS) - 1:
+            eta = LOADING_STEPS[step_index + 1]["eta"]
+            lines.append(f"⏳ ETA: ~{eta}s")
+        else:
+            lines.append("✅ All steps completed.")
+        
+        text = "\n".join(lines)
 
+    # 发送编辑请求
     url = f"https://api.telegram.org/bot{token}/editMessageText"
     try:
         resp = requests.post(url, json={
