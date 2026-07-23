@@ -741,9 +741,9 @@ def build_scene_2_message(data, date_str, time_ago_str, changes):
             change_lines.append(f" <b>Market Regime:</b> {old} → {new}")
     
     if change_lines:
-        changes_block = "🆕 <b>What's Changed?</b>\n\n" + "\n".join(change_lines)
+        changes_block = "\n🆕 <b>What's Changed?</b>\n\n" + "\n".join(change_lines)
     else:
-        changes_block = "🆕 <b>What's Changed?</b>\n\nNo significant changes detected."
+        changes_block = "\n🆕 <b>What's Changed?</b>\n\nNo significant changes detected."
     
     header += changes_block + "\n\n━━━━━━━━━━━━\n"
     
