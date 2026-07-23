@@ -519,7 +519,6 @@ def build_scene_1_message(data, date_str):
 ━━━━━━━━━━━━━━━━━━━━━━
 
 🧠 AI Summary
-🤖 AI 生成，仅供参考
 
 {get_ai_summary(trend_score, 50, "Low")}
 """
