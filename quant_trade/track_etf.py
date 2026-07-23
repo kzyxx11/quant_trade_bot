@@ -386,6 +386,35 @@ def generate_chart(data):
         dev200 = ((latest_close - latest_ma200) / latest_ma200) * 100
         trend = classify_trend(latest_close, latest_ma50, latest_ma200)
 
+        # ========== 计算叠加信息 ==========
+        trend_score = calculate_trend_score(latest_close, latest_ma50, latest_ma200)
+        momentum_score = calculate_momentum_score(df["RSI"])
+
+        # 根据 trend_score 和 momentum_score 确定 regime 和 risk
+        if trend_score >= 70:
+            regime = "Bull Market"
+            risk = "Low"
+        elif trend_score >= 50:
+            regime = "Constructive"
+            risk = "Low"
+        else:
+            regime = "Correction / Bear Market"
+            risk = "Moderate"
+
+        # 颜色规则
+        trend_color = "🟢" if trend_score >= 70 else ("🟠" if trend_score >= 50 else "🔴")
+        momentum_color = "🟢" if momentum_score >= 50 else ("🟠" if momentum_score >= 30 else "🔴")
+        risk_color = "🟢" if risk == "Low" else ("🟠" if risk == "Moderate" else "🔴")
+
+        # 组装信息文本
+        info_text = (
+            f"{trend_color} Trend: {trend_score}/100\n"
+            f"{momentum_color} Momentum: {momentum_score}/100\n"
+            f"{risk_color} Risk: {risk}\n"
+            f"📈 Regime: {regime}"
+        )
+
+        # ========== 绘图部分 ==========
         main_ax.plot(df.index, df["Close"], color="#ffffff", linewidth=1.5, label="Spot Price", alpha=0.9)
         main_ax.plot(df.index, df["MA50"], color="#ffb703", linestyle="--", linewidth=1.2, label="MA50 (Mid-term)")
         main_ax.plot(df.index, df["MA200"], color="#219ebc", linewidth=1.5, label="MA200 (Structural)")
@@ -407,6 +436,7 @@ def generate_chart(data):
         )
         main_ax.set_ylabel(f"Price ({info['currency']})", color="#888888", fontsize=9)
 
+        # 右上角原有信息框（保留）
         status_text = (
             f"Live Spot  : {info['symbol']}{latest_close:.2f}\n"
             f"MA50 Nodes : {info['symbol']}{latest_ma50:.2f}\n"
@@ -419,9 +449,21 @@ def generate_chart(data):
             verticalalignment='top', horizontalalignment='right',
             bbox=dict(boxstyle='round,pad=0.5', facecolor='#1e1e1e', edgecolor='#333333', alpha=0.8)
         )
+
+        # ========== 新增：叠加信息框（更靠右上角） ==========
+        main_ax.text(
+            0.98, 0.55, info_text,
+            transform=main_ax.transAxes,
+            fontsize=9, fontfamily='monospace',
+            verticalalignment='top', horizontalalignment='right',
+            bbox=dict(boxstyle='round,pad=0.5', facecolor='#1e1e1e', edgecolor='#333333', alpha=0.8),
+            linespacing=1.3
+        )
+
         main_ax.tick_params(axis='both', colors='#888888', labelsize=8.5)
         main_ax.legend(loc="lower left", frameon=True, facecolor='#121212', edgecolor='#222222', fontsize=8.5)
 
+        # RSI 子图保持不变
         rsi_ax.plot(df.index, df["RSI"], color="#8338ec", linewidth=1.2, label="RSI (14)", alpha=0.85)
         rsi_ax.axhline(70, color="#d90429", linestyle=":", linewidth=1.0, alpha=0.6)
         rsi_ax.axhline(30, color="#00b4d8", linestyle=":", linewidth=1.0, alpha=0.6)
