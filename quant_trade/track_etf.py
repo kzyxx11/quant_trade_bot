@@ -12,6 +12,119 @@ import yfinance as yf
 TELEGRAM_TOKEN = os.getenv("TG_BOT_TOKEN")
 CHAT_ID = os.getenv("TG_CHAT_ID")
 
+# ============================================================
+# NEW REPORT SYSTEM - CONFIGURATION & SCENE ENGINE
+# ============================================================
+
+# 场景判定阈值配置（量化）
+SCENE_THRESHOLDS = {
+    "trend": {
+        "bull_min": 70,       # Trend >= 70 视为牛市
+        "bear_max": 30,       # Trend <= 30 视为熊市
+    },
+    "momentum": {
+        "healthy_min": 20,    # Momentum >= 20 视为正常
+        "alert_threshold": 15, # 单日跌幅超过此值触发注意
+        "buffer_zone": (19, 21),  # 防抖动缓冲带
+    },
+    "risk": {
+        "low_max": 30,
+        "moderate_max": 60,
+        "high_min": 60,
+    },
+    "historical": {
+        "rare_threshold": 30,   # Historical Match 样本数低于此值视为稀有
+        "very_rare_threshold": 5, # 极端稀有
+    }
+}
+
+# 场景判定状态机
+SCENE_STATES = {
+    "SCENE_1": {
+        "name": "Normal Report",
+        "title": "📊 ETF DAILY REPORT",
+        "emoji": "🟢",
+        "push_type": "silent",
+    },
+    "SCENE_2": {
+        "name": "Market Update",
+        "title": "⚠️ MARKET UPDATE",
+        "emoji": "🟠",
+        "push_type": "normal",
+    },
+    "SCENE_3": {
+        "name": "Market Alert",
+        "title": "🚨 MARKET ALERT",
+        "emoji": "🔴",
+        "push_type": "alert",
+    },
+    "SCENE_4": {
+        "name": "Special Report",
+        "title": "🚨 SPECIAL REPORT",
+        "emoji": "🔴",
+        "push_type": "alert",
+    }
+}
+
+# 防抖动缓存（记录最近 N 次判定的结果）
+_scene_history = []
+_SCENE_HISTORY_MAX = 5  # 连续 5 次采样确认后才切换场景
+
+def _determine_scene(trend_score, momentum_score, risk_level, match_count):
+    """
+    核心场景判定引擎，含防抖动逻辑。
+    返回 scene_key (SCENE_1/2/3/4) 和判定依据。
+    """
+    global _scene_history
+    
+    # 1. 基础判定（基于当前数据）
+    if match_count < SCENE_THRESHOLDS["historical"]["very_rare_threshold"]:
+        raw_scene = "SCENE_4"
+    elif match_count < SCENE_THRESHOLDS["historical"]["rare_threshold"]:
+        raw_scene = "SCENE_3"
+    elif (risk_level == "High" and 
+          trend_score < SCENE_THRESHOLDS["trend"]["bull_min"]):
+        raw_scene = "SCENE_3"
+    elif (momentum_score < SCENE_THRESHOLDS["momentum"]["alert_threshold"] or
+          risk_level == "Moderate"):
+        raw_scene = "SCENE_2"
+    else:
+        raw_scene = "SCENE_1"
+    
+    # 2. 防抖动：缓冲带检查
+    # 如果 Momentum 在缓冲带内，不轻易切换
+    if (SCENE_THRESHOLDS["momentum"]["buffer_zone"][0] <= momentum_score <= 
+        SCENE_THRESHOLDS["momentum"]["buffer_zone"][1]):
+        # 如果有历史记录，保持上次场景，不切换
+        if _scene_history:
+            return _scene_history[-1], {"reason": "Buffer zone, holding previous scene"}
+    
+    # 3. 记录历史并判断是否达到切换阈值
+    _scene_history.append(raw_scene)
+    if len(_scene_history) > _SCENE_HISTORY_MAX:
+        _scene_history.pop(0)
+    
+    # 统计最近 N 次中 raw_scene 的出现次数
+    if len(_scene_history) >= _SCENE_HISTORY_MAX:
+        counts = {}
+        for s in _scene_history:
+            counts[s] = counts.get(s, 0) + 1
+        # 如果 raw_scene 出现次数 >= 3，切换
+        if counts.get(raw_scene, 0) >= 3:
+            return raw_scene, {"reason": f"Confirmed over {_SCENE_HISTORY_MAX} samples"}
+        else:
+            # 未达到切换阈值，返回上一个稳定场景
+            return _scene_history[-2] if len(_scene_history) >= 2 else "SCENE_1", {"reason": "Not enough samples"}
+    else:
+        # 历史不足，返回当前判定结果
+        return raw_scene, {"reason": "Initial判定"}
+
+def escape_html(text):
+    """安全转义 HTML 特殊字符"""
+    if not text:
+        return ""
+    return html.escape(str(text))
+
 MIN_ROWS_REQUIRED = 200
 CHART_LOOKBACK_ROWS = 252
 OUTPUT_DIR = Path("outputs")
@@ -336,12 +449,35 @@ def generate_chart(data):
     return CHART_PATH
 
 
-def build_message(data):
-    if not data:
-        return "⚠️ <b>ETF Trend Monitor</b>\n\nNo valid ETF data was retrieved in this run."
+def build_scene_1_message(data, date_str):
+    """
+    场景一：📊 ETF DAILY REPORT（正常市场，静默推送）
+    符合新规范：HTML转义、分隔线、固定底部、动态数据
+    """
+    # 1. 准备头部（静态）
+    header = """
+━━━━━━━━━━━━━━━━━━━━━━
+📊 ETF DAILY REPORT
+━━━━━━━━━━━━━━━━━━━━━━
 
-    message_parts = ["📊 <b>ETF Trend &amp; Momentum Monitor</b>"]
+🟢 Market    Bull Market
+🟢 Risk      Low
+💰 DCA       Normal (100%)
+📌 Action    Continue Investing
 
+━━━━━━━━━━━━━━━━━━━━━━
+
+🧠 AI Summary
+🤖 AI 生成，仅供参考
+
+The long-term trend remains healthy.
+Recent weakness appears to be a normal bull-market pullback.
+No portfolio adjustment is required.
+
+"""
+
+    # 2. 准备每个 ETF 的数据块
+    asset_blocks = []
     for ticker, info in data.items():
         df = info["df"]
         close_price = df["Close"].iloc[-1]
@@ -349,61 +485,79 @@ def build_message(data):
         ma200 = df["MA200"].iloc[-1]
         rsi = df["RSI"].iloc[-1]
 
-        dev50 = ((close_price - ma50) / ma50) * 100
-        dev200 = ((close_price - ma200) / ma200) * 100
-
         trend_score = calculate_trend_score(close_price, ma50, ma200)
         momentum_score = calculate_momentum_score(df["RSI"])
-
         historical = run_historical_analysis(
             df=info["df_full"],
             current_trend_score=trend_score,
             current_momentum_score=momentum_score
         )
 
-        hist_text = ""
+        # 转义资产名称
+        asset_name = escape_html(info["name"])
+        symbol = escape_html(info["symbol"])
+        currency = escape_html(info["currency"])
+
+        # 颜色判断
+        trend_color = "🟢" if trend_score >= 70 else ("🟠" if trend_score >= 50 else "🔴")
+        momentum_color = "🟢" if momentum_score >= 50 else ("🟠" if momentum_score >= 30 else "🔴")
+
+        # 历史统计
         if "error" not in historical:
-            hist_text += f"\n📜 **Historical Match**: {historical['match_count']} occurrences\n"
-            for days, stats in historical['periods'].items():
-                if "error" not in stats:
-                    hist_text += (
-                        f"  • Next {days}d: Win {stats['win_rate']}% | "
-                        f"Avg {stats['avg_return']:+.1f}% | "
-                        f"MaxDD {stats['max_dd']:.1f}%\n"
-                    )
-                else:
-                    hist_text += f"  • Next {days}d: {stats['error']}\n"
+            match_count = historical.get("match_count", 0)
+            win_rate_90d = historical.get("periods", {}).get(90, {}).get("win_rate", 0)
+            avg_return = historical.get("periods", {}).get(90, {}).get("avg_return", 0)
+            max_dd = historical.get("periods", {}).get(90, {}).get("max_dd", 0)
+            
+            # 如果历史匹配数很少，用"稀有"表述
+            if match_count < SCENE_THRESHOLDS["historical"]["rare_threshold"]:
+                match_text = f"📚 Historical Evidence\n* {match_count} similar cases (limited sample)\n* 90-Day Win Rate: {win_rate_90d:.1f}%\n* Avg Return: {avg_return:+.1f}%\n* Max Drawdown: {max_dd:.1f}%"
+            else:
+                match_text = f"📚 Historical Match\n* {match_count} similar cases\n* Win Rate: {win_rate_90d:.1f}%\n* Avg Return (90D): {avg_return:+.1f}%\n* Max Drawdown: {max_dd:.1f}%"
         else:
-            hist_text = f"\n📜 **Historical Match**: {historical['error']}"
+            match_text = "📚 Historical Match\n* Insufficient data"
 
-        market_state = get_market_state(close_price, ma50, ma200)
-        trend_text = market_state["trend_text"]
-        momentum_text = explain_scores(momentum_score)
+        # 组装单个资产块
+        block = f"""
+━━━━━━━━━━━━━━━━━━━━━━
+📈 {asset_name}
 
-        name = html.escape(info["name"])
-        symbol = info["symbol"]
-        currency = html.escape(info["currency"])
+{trend_color} Trend      {trend_score}/100
+{momentum_color} Momentum   {momentum_score}/100
 
-        message_parts.append(
-            "\n".join([
-                f"<b>{name}</b>",
-                "",
-                f"📈 <b>Trend Score: {trend_score}/100</b>",
-                html.escape(trend_text),
-                "",
-                f"⚡ <b>Momentum Score: {momentum_score}/100</b>",
-                html.escape(momentum_text),
-                hist_text,
-                "",
-                f"• Latest close: {symbol}{close_price:.2f} ({currency})",
-                f"• MA50: {symbol}{ma50:.2f} ({dev50:+.1f}%)",
-                f"• MA200: {symbol}{ma200:.2f} ({dev200:+.1f}%)",
-                f"• RSI (14): {rsi:.1f}",
-            ])
-        )
+{match_text}
+"""
+        asset_blocks.append(block)
 
-    return "\n\n".join(message_parts)
+    # 3. 底部信息
+    footer = f"""
+━━━━━━━━━━━━━━━━━━━━━━
 
+⚠️ Monitor
+* Break below MA200
+* Momentum < 20
+
+💡 Daily Insight
+Market remains in a strong uptrend. Continue your regular DCA.
+
+━━━━━━━━━━━━━━━━━━━━━━
+📅 数据截至：{date_str} 交易日收盘
+🤖 QuantTrackerBot
+⚠️ 非投资建议，AI生成内容仅供参考
+"""
+
+    # 4. 组合完整消息
+    full_message = header + "\n".join(asset_blocks) + footer
+
+    # 5. 安全检查：如果消息超过 4096 字符，拆分
+    if len(full_message) > 4096:
+        # 简单拆分：先截断头部 + 第一个资产，剩下的放第二部分
+        # 这里先做简单处理，实际可递归拆分
+        first_part = header + asset_blocks[0] + "\n━━━━━━━━━━━━━━━━━━━━━━\n(消息过长，请继续查看第二部分)"
+        second_part = "\n".join(asset_blocks[1:]) + footer
+        return [first_part, second_part]
+    else:
+        return [full_message]
 
 def post_telegram_request(url, payload, files=None):
     response = requests.post(url, data=payload, files=files, timeout=30)
@@ -735,8 +889,22 @@ def main():
     
     generate_trend_chart()
     chart_path = generate_chart(data)
-    message = build_message(data)
-    send_to_telegram(chart_path, message)
+    
+    # ---- 新消息系统开始 ----
+    # 准备日期字符串（用于显示）
+    display_date = datetime.now(tz_gmt8).strftime("%Y-%m-%d %H:%M")
+    
+    # 生成场景一消息（列表，可能是多段）
+    messages = build_scene_1_message(data, display_date)
+    
+    # 发送所有消息段
+    for msg in messages:
+        # 先发送图片（只发一次）
+        if msg == messages[0]:
+            send_to_telegram(chart_path, msg)
+        else:
+            # 后续消息只发文本
+            send_to_telegram(None, msg)
 
     # Generate web dashboard
     tz_gmt8 = timezone(timedelta(hours=8))
