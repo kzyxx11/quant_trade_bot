@@ -667,7 +667,7 @@ def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
             try:
                 if chart_path and Path(chart_path).exists():
                     with Path(chart_path).open("rb") as photo:
-                        caption = text_message if len(text_message) <= TELEGRAM_CAPTION_LIMIT else "📊 ETF trend update"
+                        caption = text_message if len(text_message) <= TELEGRAM_CAPTION_LIMIT else "<b>📊 Market Dashboard</b>"
                         post_telegram_request(
                             photo_url,
                             {
