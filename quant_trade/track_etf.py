@@ -716,10 +716,10 @@ def build_scene_2_message(data, date_str, time_ago_str, changes):
 ⚠️ <b>MARKET UPDATE</b>
 ━━━━━━━━━━━━
 
-🟡 <b>Market:</b> {market_status}
-🟡 <b>Risk:</b> {changes.get('risk', ('Unknown', 'Unknown'))[1]}  # 使用最新风险
-💰 <b>DCA:</b> {dca_status}
-📌 <b>Action:</b> {action_status}
+🟡 <b>Market: {market_status}</b>
+🟡 <b>Risk: {changes.get('risk', ('Unknown', 'Unknown'))[1]}</b>
+💰 <b>DCA: {dca_status}</b>
+📌 <b>Action: {action_status}</b> 
 
 ━━━━━━━━━━━━
 """
@@ -729,28 +729,27 @@ def build_scene_2_message(data, date_str, time_ago_str, changes):
     if changes:
         if 'trend' in changes:
             old, new = changes['trend']
-            change_lines.append(f"* Trend: {old} → {new}")
+            change_lines.append(f" <b>Trend:</b> {old} → {new}")
         if 'momentum' in changes:
             old, new = changes['momentum']
-            change_lines.append(f"* Momentum: {old} → {new}")
+            change_lines.append(f" <b>Momentum:</b> {old} → {new}")
         if 'risk' in changes:
             old, new = changes['risk']
-            change_lines.append(f"* Risk: {old} → {new}")
+            change_lines.append(f" <b>Risk:</b> {old} → {new}")
         if 'regime' in changes:
             old, new = changes['regime']
-            change_lines.append(f"* Market Regime: {old} → {new}")
+            change_lines.append(f" <b>Market Regime:</b> {old} → {new}")
     
     if change_lines:
-        changes_block = "🆕 <b>What's Changed?</b>\n" + "\n".join(change_lines)
+        changes_block = "🆕 <b>What's Changed?</b>\n\n" + "\n".join(change_lines)
     else:
-        changes_block = "🆕 <b>What's Changed?</b>\nNo significant changes detected."
+        changes_block = "🆕 <b>What's Changed?</b>\n\nNo significant changes detected."
     
     header += changes_block + "\n━━━━━━━━━━━━\n"
     
     # 4. AI Summary（场景二风格）
     ai_summary = f"""
 <b>🧠 AI Summary</b>
-🤖 AI-generated, for reference only
 
 Momentum has weakened noticeably.
 However, both ETFs remain above their 200-day moving average.
@@ -786,12 +785,12 @@ No action is recommended at this stage.
             win_rate_90d = historical.get("periods", {}).get(90, {}).get("win_rate", 0)
             avg_return = historical.get("periods", {}).get(90, {}).get("avg_return", 0)
             max_dd = historical.get("periods", {}).get(90, {}).get("max_dd", 0)
-            match_text = f"<b>📚 Historical Match</b>\n<i>(15-year comparison)</i>\n{match_count} similar cases\nWin Rate: {win_rate_90d:.1f}%\nAvg Return (90D): {avg_return:+.1f}%\nMax Drawdown: {max_dd:.1f}%"
+            match_text = f"<b>📚 Historical Match</b>\n(15-year historical comparison)\n\n• {match_count} similar cases\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return (90D): {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
         else:
             match_text = "<b>📚 Historical Match</b>\nInsufficient data"
         
-        block = f"""
-━━━━━━━━━━━━
+        block = f"""━━━━━━━━━━━━
+
 <b>📈 {asset_name}</b>
 
 {trend_color} <b>Trend:</b> {trend_score}/100
@@ -820,9 +819,13 @@ No action is recommended at this stage.
 {daily_insight}
 
 ━━━━━━━━━━━━
-📅 <b>Data as of:</b> {time_ago_str}
+
+
+📅 Data as of: {time_ago_str}
 🤖 QuantTrackerBot
-⚠️ Not financial advice. AI-generated content for reference.
+
+
+<i>This content is for informational purposes only. It does not constitute financial or investment advice.</i>
 """
     
     full_message = header + "\n".join(asset_blocks) + footer
