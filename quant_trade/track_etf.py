@@ -745,7 +745,7 @@ def build_scene_2_message(data, date_str, time_ago_str, changes):
     else:
         changes_block = "🆕 <b>What's Changed?</b>\n\nNo significant changes detected."
     
-    header += changes_block + "\n━━━━━━━━━━━━\n"
+    header += changes_block + "\n\n━━━━━━━━━━━━\n"
     
     # 4. AI Summary（场景二风格）
     ai_summary = f"""
