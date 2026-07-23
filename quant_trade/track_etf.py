@@ -530,6 +530,7 @@ def build_scene_1_message(data, date_str, time_ago_str):
 <b>🧠 AI Summary</b>
 
 {get_ai_summary(trend_score_first, 50, "Low")}
+
 """
     # 3. 构建每个资产的区块
     asset_blocks = []
