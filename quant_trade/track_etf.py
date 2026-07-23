@@ -407,9 +407,9 @@ def generate_chart(data):
         risk_color = "🟢" if risk == "Low" else ("🟠" if risk == "Moderate" else "🔴")
 
         # 定义颜色缩写
-        def color_abbr(score, type='score'):
+        def _color_tag(score, type='score'):
             if type == 'score':
-                if score >= 70: return "(G)"
+                if score >= 70: return "[G]"
                 elif score >= 50: return "(Y)"
                 else: return "(R)"
             else:  # risk
@@ -418,9 +418,9 @@ def generate_chart(data):
                 else: return "(R)"
 
         info_text = (
-            f"{color_abbr(trend_score)} Trend: {trend_score}/100\n"
-            f"{color_abbr(momentum_score)} Momentum: {momentum_score}/100\n"
-            f"{color_abbr(risk, 'risk')} Risk: {risk}\n"
+            f"Trend: {trend_score}/100\n"
+            f"Momentum: {momentum_score}/100\n"
+            f"Risk: {risk}\n"
             f"Regime: {regime}"
         )
 
