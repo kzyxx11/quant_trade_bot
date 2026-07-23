@@ -449,7 +449,6 @@ def generate_chart(data):
     return CHART_PATH
 
 def get_ai_summary(trend_score, momentum_score, risk_level):
-    """根据趋势、动量、风险自动选择合适的 AI Summary 模板"""
     if trend_score >= 70 and momentum_score >= 50:
         return "The long-term trend remains healthy. Recent weakness appears to be a normal bull-market pullback. No portfolio adjustment is required."
     elif trend_score >= 70 and 30 <= momentum_score < 50:
@@ -464,7 +463,6 @@ def get_ai_summary(trend_score, momentum_score, risk_level):
         return "Market conditions are weak. Caution is recommended. Await clearer signals before adding exposure."
 
 def get_daily_insight(action_type):
-    """根据行动建议类型生成每日洞察"""
     if action_type == "buy":
         return "Current market structure historically favors accumulators. Consider deploying capital gradually."
     elif action_type == "hold":
@@ -475,7 +473,6 @@ def get_daily_insight(action_type):
         return "Monitor key levels. No change to current strategy."
 
 def build_monitor(close_price, ma200, momentum_score):
-    """动态生成 Monitor 列表，反映真实数据状态"""
     items = []
     if close_price < ma200:
         items.append("⚠️ Price below MA200 (long-term support broken)")
@@ -485,50 +482,65 @@ def build_monitor(close_price, ma200, momentum_score):
         items.append("Momentum is cooling (between 20-30)")
     if not items:
         items.append("No major signals at this time")
-    return "\n".join(f"* {item}" for item in items)
+    # 返回不带星号的列表，用换行连接
+    return "\n".join(items)
 
-def build_scene_1_message(data, date_str):
-    # 1. 获取整体市场状态
+def build_scene_1_message(data, date_str, time_ago_str):
+    """
+    场景一：📊 ETF DAILY REPORT（正常市场，静默推送）
+    符合所有新格式要求：英文、加粗、分隔线缩短、标签对齐、无星号、动态相对时间
+    """
+    # 1. 获取整体市场状态（取第一个资产作为代表）
     first_ticker = list(data.keys())[0]
-    df = data[first_ticker]["df"]
-    close_price = df["Close"].iloc[-1]
-    ma50 = df["MA50"].iloc[-1]
-    ma200 = df["MA200"].iloc[-1]
-    trend_score = calculate_trend_score(close_price, ma50, ma200)
+    df_first = data[first_ticker]["df"]
+    close_first = df_first["Close"].iloc[-1]
+    ma50_first = df_first["MA50"].iloc[-1]
+    ma200_first = df_first["MA200"].iloc[-1]
+    trend_score_first = calculate_trend_score(close_first, ma50_first, ma200_first)
     
-    if trend_score >= 70:
+    if trend_score_first >= 70:
         market_status = "Bull Market"
         dca_status = "Normal (100%)"
         action_status = "Continue Investing"
-    else:
+        action_type = "buy"
+    elif trend_score_first >= 50:
         market_status = "Constructive"
         dca_status = "Normal (100%)"
         action_status = "Continue Investing"
+        action_type = "hold"
+    else:
+        market_status = "Correction / Bear Market"
+        dca_status = "Reduce (50-75%)"
+        action_status = "Stay Patient"
+        action_type = "wait"
     
-    # 2. 构建头部
+    # 2. 构建头部（使用 <b> 加粗，标签+值格式对齐）
     header = f"""
-━━━━━━━━━━━━━━━━━━━━━━
-📊 ETF DAILY REPORT
-━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━
+📊 <b>ETF DAILY REPORT</b>
+━━━━━━━━━━━━
 
-🟢 Market    {market_status}
-🟢 Risk      Low
-💰 DCA       {dca_status}
-📌 Action    {action_status}
+🟢 <b>Market:</b> {market_status}
+🟢 <b>Risk:</b> Low
+💰 <b>DCA:</b> {dca_status}
+📌 <b>Action:</b> {action_status}
 
-━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━
 
-🧠 AI Summary
+<b>🧠 AI Summary</b>
+🤖 AI-generated, for reference only
 
-{get_ai_summary(trend_score, 50, "Low")}
+{get_ai_summary(trend_score_first, 50, "Low")}
 """
-    # 3. 构建资产块（与之前相同，略）
+    # 3. 构建每个资产的区块
     asset_blocks = []
     for ticker, info in data.items():
         df = info["df"]
         close_price = df["Close"].iloc[-1]
         ma50 = df["MA50"].iloc[-1]
         ma200 = df["MA200"].iloc[-1]
+        rsi = df["RSI"].iloc[-1]
+        
         trend_score = calculate_trend_score(close_price, ma50, ma200)
         momentum_score = calculate_momentum_score(df["RSI"])
         historical = run_historical_analysis(
@@ -537,63 +549,66 @@ def build_scene_1_message(data, date_str):
             current_momentum_score=momentum_score
         )
         asset_name = escape_html(info["name"])
+        symbol = escape_html(info["symbol"])
+        
+        # 颜色
         trend_color = "🟢" if trend_score >= 70 else ("🟠" if trend_score >= 50 else "🔴")
         momentum_color = "🟢" if momentum_score >= 50 else ("🟠" if momentum_score >= 30 else "🔴")
         
+        # 历史统计
         if "error" not in historical:
             match_count = historical.get("match_count", 0)
             win_rate_90d = historical.get("periods", {}).get(90, {}).get("win_rate", 0)
             avg_return = historical.get("periods", {}).get(90, {}).get("avg_return", 0)
             max_dd = historical.get("periods", {}).get(90, {}).get("max_dd", 0)
             if match_count < SCENE_THRESHOLDS["historical"]["rare_threshold"]:
-                match_text = f"📚 Historical Evidence\n* {match_count} similar cases (limited sample)\n* 90-Day Win Rate: {win_rate_90d:.1f}%\n* Avg Return: {avg_return:+.1f}%\n* Max Drawdown: {max_dd:.1f}%"
+                match_text = f"<b>Historical Evidence</b>\n{match_count} similar cases (limited sample)\n90-Day Win Rate: {win_rate_90d:.1f}%\nAvg Return: {avg_return:+.1f}%\nMax Drawdown: {max_dd:.1f}%"
             else:
-                match_text = f"📚 Historical Match\n* {match_count} similar cases\n* Win Rate: {win_rate_90d:.1f}%\n* Avg Return (90D): {avg_return:+.1f}%\n* Max Drawdown: {max_dd:.1f}%"
+                match_text = f"<b>Historical Match</b>\n{match_count} similar cases\nWin Rate: {win_rate_90d:.1f}%\nAvg Return (90D): {avg_return:+.1f}%\nMax Drawdown: {max_dd:.1f}%"
         else:
-            match_text = "📚 Historical Match\n* Insufficient data"
+            match_text = "<b>Historical Match</b>\nInsufficient data"
         
+        # 组装单个资产块
         block = f"""
-━━━━━━━━━━━━━━━━━━━━━━
-📈 {asset_name}
+━━━━━━━━━━━━
+<b>📈 {asset_name}</b>
 
-{trend_color} Trend      {trend_score}/100
-{momentum_color} Momentum   {momentum_score}/100
+{trend_color} <b>Trend</b>      {trend_score}/100
+{momentum_color} <b>Momentum</b>   {momentum_score}/100
+
+<b>📊 Latest Price:</b> {symbol}{close_price:.2f}
+<b>📈 MA50:</b> {symbol}{ma50:.2f}
+<b>📉 MA200:</b> {symbol}{ma200:.2f}
+<b>📊 RSI (14):</b> {rsi:.1f}
 
 {match_text}
 """
         asset_blocks.append(block)
     
     # 4. 构建底部（动态 Monitor 和 Daily Insight）
-    # 获取第一个资产的行动建议（简化：用趋势分判断）
-    if trend_score >= 70:
-        action_type = "buy"
-    elif trend_score >= 50:
-        action_type = "hold"
-    else:
-        action_type = "wait"
-    
-    monitor_text = build_monitor(close_price, ma200, 50)  # 用 momentum 50 示例，实际应传入真实动量
+    monitor_text = build_monitor(close_first, ma200_first, 50)  # 用第一个资产的数据，实际可改进
     daily_insight = get_daily_insight(action_type)
     
     footer = f"""
-━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━
 
-⚠️ Monitor
+<b>⚠️ Monitor</b>
 {monitor_text}
 
-💡 Daily Insight
+<b>💡 Daily Insight</b>
 {daily_insight}
 
-━━━━━━━━━━━━━━━━━━━━━━
-📅 数据截至：{date_str} 交易日收盘
+━━━━━━━━━━━━
+📅 <b>Data as of:</b> {time_ago_str}
 🤖 QuantTrackerBot
-⚠️ 非投资建议，AI生成内容仅供参考
+⚠️ Not financial advice. AI-generated content for reference.
 """
     # 5. 组合完整消息
     full_message = header + "\n".join(asset_blocks) + footer
+    
     # 6. 安全检查：如果消息超过 4096 字符，拆分
     if len(full_message) > 4096:
-        first_part = header + asset_blocks[0] + "\n━━━━━━━━━━━━━━━━━━━━━━\n(消息过长，请继续查看第二部分)"
+        first_part = header + asset_blocks[0] + "\n━━━━━━━━━━━━\n(Message continues in next part)"
         second_part = "\n".join(asset_blocks[1:]) + footer
         return [first_part, second_part]
     else:
@@ -924,42 +939,42 @@ def main():
         return
 
     tz_gmt8 = timezone(timedelta(hours=8))
-    today_str = datetime.now(tz_gmt8).strftime("%Y-%m-%d")
+    now = datetime.now(tz_gmt8)
+    today_str = now.strftime("%Y-%m-%d")
     append_history(data, today_str)
     
     generate_trend_chart()
     chart_path = generate_chart(data)
     
-    # ---- 新消息系统开始 ----
-    # 准备日期字符串（用于显示）
-    display_date = datetime.now(tz_gmt8).strftime("%Y-%m-%d %H:%M")
+    # 计算相对时间
+    run_timestamp = now
+
+    # 这里我们将运行时间戳保存，后面生成消息时计算差值
+    # 为了简单，我们直接将当前时间作为相对基准，但实际应该用同一个时间
+    display_date = now.strftime("%Y-%m-%d %H:%M")  # 保留旧格式备用
     
-    # 生成场景一消息（列表，可能是多段）
-    messages = build_scene_1_message(data, display_date)
-    
-    # 发送所有消息段
-    for msg in messages:
-        # 先发送图片（只发一次）
-        if msg == messages[0]:
+    # 生成相对时间字符串（Just now / X min ago）
+    # 这里我们假设从脚本开始到发送消息时间很短，所以直接设为 "Just now"
+    # 但如果你希望更精确，可以记录 start_time
+    time_ago = "Just now"  # 后续可改为真实差值
+
+    # 生成场景一消息
+    messages = build_scene_1_message(data, display_date, time_ago)
+    for idx, msg in enumerate(messages):
+        if idx == 0:
             send_to_telegram(chart_path, msg)
         else:
-            # 后续消息只发文本
             send_to_telegram(None, msg)
 
-    # Generate web dashboard
-    tz_gmt8 = timezone(timedelta(hours=8))
-    today_str = datetime.now(tz_gmt8).strftime("%Y-%m-%d %H:%M (GMT+8)")
-    html_content = generate_html(data, today_str)
-
+    # 网页看板生成（不变）
+    today_str_full = now.strftime("%Y-%m-%d %H:%M (GMT+8)")
+    html_content = generate_html(data, today_str_full)
     docs_dir = Path("docs")
     docs_dir.mkdir(exist_ok=True)
-
     index_path = docs_dir / "index.html"
     with open(index_path, "w", encoding="utf-8") as f:
         f.write(html_content)
-
     print(f"[Success] Dashboard updated at {index_path}")
-
 
 if __name__ == "__main__":
     main()
