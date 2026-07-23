@@ -464,11 +464,11 @@ def get_ai_summary(trend_score, momentum_score, risk_level):
 
 def get_daily_insight(action_type):
     if action_type == "buy":
-        return "Current market structure historically favors accumulators. Consider deploying capital gradually."
+        return "Current structure has historically been favorable for accumulation."
     elif action_type == "hold":
-        return "Market conditions are stable. Continue your regular DCA without adjustment."
+        return "Conditions are stable. Continue your regular DCA."
     elif action_type == "wait":
-        return "Uncertainty is elevated. No immediate action required. Stay patient."
+        return "Uncertainty is elevated. No immediate action required."
     else:
         return "Monitor key levels. No change to current strategy."
 
@@ -563,7 +563,7 @@ def build_scene_1_message(data, date_str, time_ago_str):
             if match_count < SCENE_THRESHOLDS["historical"]["rare_threshold"]:
                 match_text = f"<b>Historical Evidence</b>\n{match_count} similar cases (limited sample)\n90-Day Win Rate: {win_rate_90d:.1f}%\nAvg Return: {avg_return:+.1f}%\nMax Drawdown: {max_dd:.1f}%"
             else:
-                match_text = f"<b>📚 Historical Match</b>\n\n• {match_count} similar cases\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return (90D): {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
+                match_text = f"<b>📚 Historical Match</b>\n(15-year historical comparison)\n\n• {match_count} similar cases\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return (90D): {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
         else:
             match_text = "<b>📚 Historical Match</b>\nInsufficient data"
         # 组装单个资产块
