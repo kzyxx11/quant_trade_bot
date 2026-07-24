@@ -625,7 +625,7 @@ def build_scene_1_message(data, date_str, time_ago_str):
             avg_return = historical.get("periods", {}).get(90, {}).get("avg_return", 0)
             max_dd = historical.get("periods", {}).get(90, {}).get("max_dd", 0)
             if match_count < SCENE_THRESHOLDS["historical"]["rare_threshold"]:
-                match_text = f"<b>📚 Historical Evidence</b>\n\n• {match_count} similar cases (limited sample)\n• 90-Day Win Rate: {win_rate_90d:.1f}%\n• Avg Return: {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
+                match_text = f"<b>📚 Historical Evidence</b>\n\n• {match_count} similar cases\n• 90-Day Win Rate: {win_rate_90d:.1f}%\n• Avg Return: {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
             else:
                 match_text = f"<b>📚 Historical Match</b>\n(15-year historical comparison)\n\n• {match_count} similar cases\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return (90D): {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
         else:
@@ -928,7 +928,7 @@ Short-term volatility is expected.
             win_rate_90d = historical.get("periods", {}).get(90, {}).get("win_rate", 0)
             avg_return = historical.get("periods", {}).get(90, {}).get("avg_return", 0)
             max_dd = historical.get("periods", {}).get(90, {}).get("max_dd", 0)
-            match_text = f"<b>📚 Historical Evidence</b>\n(15-year historical comparison)\n\n• {match_count} similar cases (limited sample)\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return (90D): {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
+            match_text = f"<b>📚 Historical Evidence</b>\n(15-year historical comparison)\n\n• {match_count} similar cases\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return (90D): {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
             if match_count < 30:
                 match_text += "\n\n⚠️ <i>Very limited sample size. Use extra caution when interpreting.</i>"
             elif match_count < 50:
@@ -1063,7 +1063,7 @@ Short-term volatility is expected. Maintain your long-term plan.
             win_rate_90d = historical.get("periods", {}).get(90, {}).get("win_rate", 0)
             avg_return = historical.get("periods", {}).get(90, {}).get("avg_return", 0)
             max_dd = historical.get("periods", {}).get(90, {}).get("max_dd", 0)
-            match_text = f"<b>📚 Historical Evidence</b>\n(15-year historical comparison)\n\n• {match_count} similar cases (very limited sample)\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return (90D): {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
+            match_text = f"<b>📚 Historical Evidence</b>\n(15-year historical comparison)\n\n• {match_count} similar cases\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return (90D): {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
             if match_count < 30:
                 match_text += "\n\n⚠️ <i>Very limited sample size. Use extra caution when interpreting.</i>"
             elif match_count < 50:
