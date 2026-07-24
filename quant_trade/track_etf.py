@@ -836,6 +836,287 @@ RSI (14): {rsi:.1f}
     else:
         return [full_message]
 
+def build_scene_3_message(data, date_str, time_ago_str):
+    """
+    场景三：🚨 MARKET ALERT（红色系，警报感）
+    触发条件：Risk=High 且 Trend 偏低（<50）
+    推送方式：带震动提醒
+    """
+    # 1. 获取整体市场状态（取第一个资产作为代表）
+    first_ticker = list(data.keys())[0]
+    df_first = data[first_ticker]["df"]
+    close_first = df_first["Close"].iloc[-1]
+    ma50_first = df_first["MA50"].iloc[-1]
+    ma200_first = df_first["MA200"].iloc[-1]
+    trend_score_first = calculate_trend_score(close_first, ma50_first, ma200_first)
+    
+    # 场景三通常出现在趋势转弱时
+    if trend_score_first >= 50:
+        market_status = "Constructive"
+        dca_status = "Reduce (50-75%)"
+        action_status = "Stay Patient"
+        action_type = "wait"
+    else:
+        market_status = "Correction / Bear Market"
+        dca_status = "Reduce (25-50%)"
+        action_status = "Stay Patient"
+        action_type = "wait"
+    
+    # 2. 构建头部（红色系标题）
+    header = f"""
+━━━━━━━━━━━━
+🚨 <b>MARKET ALERT</b>
+━━━━━━━━━━━━
+
+🔴 <b>Market: {market_status}</b>
+🔴 <b>Risk: High</b>
+💰 <b>DCA: {dca_status}</b>
+📌 <b>Action: {action_status}</b>
+
+━━━━━━━━━━━━
+"""
+    
+    # 3. Why this report? 区块
+    why_text = """
+🆕 <b>Why this report?</b>
+
+Current conditions have triggered an alert.
+Risk is elevated and trend structure has weakened significantly.
+This is not a typical pullback.
+
+"""
+    header += why_text
+    
+    # 4. AI Summary（场景三风格）
+    ai_summary = f"""
+<b>🧠 AI Summary</b>
+
+Market sentiment has turned cautious.
+Trend strength has deteriorated.
+Historically, periods like this have offered some of the strongest long-term buying opportunities.
+Short-term volatility is expected.
+
+"""
+    header += ai_summary
+    
+    # 5. 资产数据块（场景三使用 Historical Evidence）
+    asset_blocks = []
+    for ticker, info in data.items():
+        df = info["df"]
+        close_price = df["Close"].iloc[-1]
+        ma50 = df["MA50"].iloc[-1]
+        ma200 = df["MA200"].iloc[-1]
+        rsi = df["RSI"].iloc[-1]
+        
+        trend_score = calculate_trend_score(close_price, ma50, ma200)
+        momentum_score = calculate_momentum_score(df["RSI"])
+        historical = run_historical_analysis(
+            df=info["df_full"],
+            current_trend_score=trend_score,
+            current_momentum_score=momentum_score
+        )
+        asset_name = escape_html(info["name"])
+        symbol = escape_html(info["symbol"])
+        
+        trend_color = "🟢" if trend_score >= 70 else ("🟠" if trend_score >= 50 else "🔴")
+        momentum_color = "🟢" if momentum_score >= 50 else ("🟠" if momentum_score >= 30 else "🔴")
+        
+        # 历史统计（场景三用 Historical Evidence）
+        if "error" not in historical:
+            match_count = historical.get("match_count", 0)
+            win_rate_90d = historical.get("periods", {}).get(90, {}).get("win_rate", 0)
+            avg_return = historical.get("periods", {}).get(90, {}).get("avg_return", 0)
+            max_dd = historical.get("periods", {}).get(90, {}).get("max_dd", 0)
+            match_text = f"<b>📚 Historical Evidence</b>\n(15-year historical comparison)\n\n• {match_count} similar cases (limited sample)\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return (90D): {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
+            if match_count < 30:
+                match_text += "\n\n⚠️ <i>Sample size is small; use caution when interpreting.</i>"
+        else:
+            match_text = "<b>📚 Historical Evidence</b>\nInsufficient data"
+        
+        block = f"""━━━━━━━━━━━━
+
+<b>📈 {asset_name}</b>
+
+{trend_color} <b>Trend:</b> {trend_score}/100
+{momentum_color} <b>Momentum:</b> {momentum_score}/100
+
+<b>📊 Latest Price:</b> {symbol}{close_price:.2f}
+
+MA50: {symbol}{ma50:.2f}
+MA200: {symbol}{ma200:.2f}
+RSI (14): {rsi:.1f}
+
+{match_text}
+"""
+        asset_blocks.append(block)
+    
+    # 6. 底部（场景三/四使用 Expect volatility + Recommended Action）
+    footer = f"""
+━━━━━━━━━━━━
+
+<b>⚠️ Expect volatility.</b>
+Do not expect an immediate recovery.
+
+<b>🎯 Recommended Action</b>
+Stay patient. Avoid adding new positions until trend confirms recovery.
+
+━━━━━━━━━━━━
+
+📅 Data as of: {time_ago_str}
+🤖 QuantTrackerBot
+
+<i>This content is for informational purposes only. It does not constitute financial or investment advice.</i>
+"""
+    
+    full_message = header + "\n".join(asset_blocks) + footer
+    if len(full_message) > 4096:
+        first_part = header + asset_blocks[0] + "\n━━━━━━━━━━━━\n(Message continues below)"
+        second_part = "\n".join(asset_blocks[1:]) + footer
+        return [first_part, second_part]
+    else:
+        return [full_message]
+
+def build_scene_4_message(data, date_str, time_ago_str):
+    """
+    场景四：🚨 SPECIAL REPORT（红色系+特殊感）
+    触发条件：极端稀有（十年/百年一遇级别），样本极少
+    推送方式：带震动提醒，DCA 可提至 200%+
+    """
+    # 1. 获取整体市场状态（取第一个资产作为代表）
+    first_ticker = list(data.keys())[0]
+    df_first = data[first_ticker]["df"]
+    close_first = df_first["Close"].iloc[-1]
+    ma50_first = df_first["MA50"].iloc[-1]
+    ma200_first = df_first["MA200"].iloc[-1]
+    trend_score_first = calculate_trend_score(close_first, ma50_first, ma200_first)
+    
+    # 场景四极端情况，DCA 可提至 200%+
+    if trend_score_first >= 50:
+        market_status = "Constructive"
+        dca_status = "200%+"
+        action_status = "Aggressive Accumulation"
+        action_type = "buy"
+    else:
+        market_status = "Correction / Bear Market"
+        dca_status = "200%+"
+        action_status = "Aggressive Accumulation"
+        action_type = "buy"
+    
+    # 2. 构建头部（红色系+特殊感标题）
+    header = f"""
+━━━━━━━━━━━━
+🚨 <b>SPECIAL REPORT</b>
+━━━━━━━━━━━━
+
+🔴 <b>Market: {market_status}</b>
+🔴 <b>Risk: Extreme</b>
+💰 <b>DCA: {dca_status}</b>
+📌 <b>Action: {action_status}</b>
+
+━━━━━━━━━━━━
+"""
+    
+    # 3. Why this report? 区块（场景四强调极端稀有）
+    why_text = """
+🆕 <b>Why this report?</b>
+
+Current conditions are extremely rare.
+Only a handful of similar setups have occurred over the past 30 years.
+This is a generational event.
+
+"""
+    header += why_text
+    
+    # 4. AI Summary（场景四风格）
+    ai_summary = f"""
+<b>🧠 AI Summary</b>
+
+Market sentiment is deeply negative.
+Historical precedents suggest this is one of the strongest long-term buying opportunities.
+Short-term volatility is expected. Maintain your long-term plan.
+
+"""
+    header += ai_summary
+    
+    # 5. 资产数据块（场景四使用 Historical Evidence，且强调样本量小）
+    asset_blocks = []
+    for ticker, info in data.items():
+        df = info["df"]
+        close_price = df["Close"].iloc[-1]
+        ma50 = df["MA50"].iloc[-1]
+        ma200 = df["MA200"].iloc[-1]
+        rsi = df["RSI"].iloc[-1]
+        
+        trend_score = calculate_trend_score(close_price, ma50, ma200)
+        momentum_score = calculate_momentum_score(df["RSI"])
+        historical = run_historical_analysis(
+            df=info["df_full"],
+            current_trend_score=trend_score,
+            current_momentum_score=momentum_score
+        )
+        asset_name = escape_html(info["name"])
+        symbol = escape_html(info["symbol"])
+        
+        trend_color = "🟢" if trend_score >= 70 else ("🟠" if trend_score >= 50 else "🔴")
+        momentum_color = "🟢" if momentum_score >= 50 else ("🟠" if momentum_score >= 30 else "🔴")
+        
+        # 历史统计（场景四用 Evidence，且强制显示样本量警告）
+        if "error" not in historical:
+            match_count = historical.get("match_count", 0)
+            win_rate_90d = historical.get("periods", {}).get(90, {}).get("win_rate", 0)
+            avg_return = historical.get("periods", {}).get(90, {}).get("avg_return", 0)
+            max_dd = historical.get("periods", {}).get(90, {}).get("max_dd", 0)
+            match_text = f"<b>📚 Historical Evidence</b>\n(15-year historical comparison)\n\n• {match_count} similar cases (very limited sample)\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return (90D): {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
+            if match_count < 10:
+                match_text += "\n\n⚠️ <i>Extremely small sample size. Use extra caution when interpreting.</i>"
+        else:
+            match_text = "<b>📚 Historical Evidence</b>\nInsufficient data"
+        
+        block = f"""━━━━━━━━━━━━
+
+<b>📈 {asset_name}</b>
+
+{trend_color} <b>Trend:</b> {trend_score}/100
+{momentum_color} <b>Momentum:</b> {momentum_score}/100
+
+<b>📊 Latest Price:</b> {symbol}{close_price:.2f}
+
+MA50: {symbol}{ma50:.2f}
+MA200: {symbol}{ma200:.2f}
+RSI (14): {rsi:.1f}
+
+{match_text}
+"""
+        asset_blocks.append(block)
+    
+    # 6. 底部（场景四的 Recommended Action 更激进）
+    footer = f"""
+━━━━━━━━━━━━
+
+<b>⚠️ Expect volatility.</b>
+Do not expect an immediate recovery.
+This may be a once-in-a-decade opportunity.
+
+<b>🎯 Recommended Action</b>
+Consider aggressive accumulation if your risk tolerance allows.
+Maintain a long-term perspective.
+
+━━━━━━━━━━━━
+
+📅 Data as of: {time_ago_str}
+🤖 QuantTrackerBot
+
+<i>This content is for informational purposes only. It does not constitute financial or investment advice.</i>
+"""
+    
+    full_message = header + "\n".join(asset_blocks) + footer
+    if len(full_message) > 4096:
+        first_part = header + asset_blocks[0] + "\n━━━━━━━━━━━━\n(Message continues below)"
+        second_part = "\n".join(asset_blocks[1:]) + footer
+        return [first_part, second_part]
+    else:
+        return [full_message]
+
 def post_telegram_request(url, payload, files=None):
     response = requests.post(url, data=payload, files=files, timeout=30)
     response.raise_for_status()
@@ -1281,6 +1562,8 @@ def main():
         # 场景判定
         scene_key, _ = _determine_scene(trend_score_first, momentum_score_first, risk_level, match_count)
         print(f"[Scene] Determined scene: {scene_key}")
+        scene_key = "SCENE_3"
+        print(f"[Scene] Forced to SCENE_3 for testing.")
 
         # 获取前一天数据（用于场景二的变化检测）
         import pandas as pd
@@ -1310,10 +1593,14 @@ def main():
             messages = build_scene_1_message(data, display_date, time_ago)
         elif scene_key == "SCENE_2":
             messages = build_scene_2_message(data, display_date, time_ago, prev_changes)
+        elif scene_key == "SCENE_3":
+            messages = build_scene_3_message(data, display_date, time_ago)
+        elif scene_key == "SCENE_4":
+            messages = build_scene_4_message(data, display_date, time_ago)
         else:
-            # 场景三/四暂用场景二作为占位（后续补充）
-            messages = build_scene_2_message(data, display_date, time_ago, prev_changes)
-            print(f"[Scene] {scene_key} not fully implemented, using SCENE_2 as fallback.")
+            # 未知场景，回退到场景一
+            messages = build_scene_1_message(data, display_date, time_ago)
+            print(f"[Scene] Unknown scene {scene_key}, falling back to SCENE_1.")
 
         # 发送所有消息段
         for idx, msg in enumerate(messages):
