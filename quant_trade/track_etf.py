@@ -884,6 +884,7 @@ Current conditions have triggered an alert.
 Risk is elevated and trend structure has weakened significantly.
 This is not a typical pullback.
 
+━━━━━━━━━━━━
 """
     header += why_text
     
