@@ -852,12 +852,12 @@ def build_scene_3_message(data, date_str, time_ago_str):
     
     # 场景三通常出现在趋势转弱时
     if trend_score_first >= 50:
-        market_status = "Constructive"
+        market_status = "Correction"
         dca_status = "Reduce (50-75%)"
         action_status = "Stay Patient"
         action_type = "wait"
     else:
-        market_status = "Correction / Bear Market"
+        market_status = "Bear Market"
         dca_status = "Reduce (25-50%)"
         action_status = "Stay Patient"
         action_type = "wait"
@@ -930,9 +930,10 @@ Short-term volatility is expected.
             max_dd = historical.get("periods", {}).get(90, {}).get("max_dd", 0)
             match_text = f"<b>📚 Historical Evidence</b>\n(15-year historical comparison)\n\n• {match_count} similar cases (limited sample)\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return (90D): {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
             if match_count < 30:
-                match_text += "\n\n⚠️ <i>Sample size is small; use caution when interpreting.</i>"
-        else:
-            match_text = "<b>📚 Historical Evidence</b>\nInsufficient data"
+                match_text += "\n\n⚠️ <i>Very limited sample size. Use extra caution when interpreting.</i>"
+            elif match_count < 50:
+                match_text += "\n\n<i>Limited sample size. Interpret with care.</i>"
+            # 50 以上不显示任何警告
         
         block = f"""━━━━━━━━━━━━
 
@@ -992,16 +993,10 @@ def build_scene_4_message(data, date_str, time_ago_str):
     trend_score_first = calculate_trend_score(close_first, ma50_first, ma200_first)
     
     # 场景四极端情况，DCA 可提至 200%+
-    if trend_score_first >= 50:
-        market_status = "Constructive"
-        dca_status = "200%+"
-        action_status = "Aggressive Accumulation"
-        action_type = "buy"
-    else:
-        market_status = "Correction / Bear Market"
-        dca_status = "200%+"
-        action_status = "Aggressive Accumulation"
-        action_type = "buy"
+    market_status = "Bear Market"
+    dca_status = "200%+"
+    action_status = "Aggressive Accumulation"
+    action_type = "buy"
     
     # 2. 构建头部（红色系+特殊感标题）
     header = f"""
@@ -1025,6 +1020,7 @@ Current conditions are extremely rare.
 Only a handful of similar setups have occurred over the past 30 years.
 This is a generational event.
 
+━━━━━━━━━━━━
 """
     header += why_text
     
@@ -1068,10 +1064,11 @@ Short-term volatility is expected. Maintain your long-term plan.
             avg_return = historical.get("periods", {}).get(90, {}).get("avg_return", 0)
             max_dd = historical.get("periods", {}).get(90, {}).get("max_dd", 0)
             match_text = f"<b>📚 Historical Evidence</b>\n(15-year historical comparison)\n\n• {match_count} similar cases (very limited sample)\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return (90D): {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
-            if match_count < 10:
-                match_text += "\n\n⚠️ <i>Extremely small sample size. Use extra caution when interpreting.</i>"
-        else:
-            match_text = "<b>📚 Historical Evidence</b>\nInsufficient data"
+            if match_count < 30:
+                match_text += "\n\n⚠️ <i>Very limited sample size. Use extra caution when interpreting.</i>"
+            elif match_count < 50:
+                match_text += "\n\n<i>Limited sample size. Interpret with care.</i>"
+            # 50 以上不显示任何警告
         
         block = f"""━━━━━━━━━━━━
 
