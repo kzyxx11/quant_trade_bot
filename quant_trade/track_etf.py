@@ -1201,7 +1201,7 @@ def edit_loading_message(chat_id, message_id, step_index, error=None):
     except Exception as e:
         print(f"[EditMessage] Exception: {e}")
 
-def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
+def send_to_telegram(chart_path, text_message, disable_notification=False, retries=3, backoff_seconds=5):
     if not TELEGRAM_TOKEN or not CHAT_ID:
         print("Error: TG_BOT_TOKEN and TG_CHAT_ID must be configured as repository secrets.")
         return False
@@ -1231,6 +1231,7 @@ def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
                                 "chat_id": target_chat_id,
                                 "caption": caption,
                                 "parse_mode": "HTML",
+                                "disable_notification": disable_notification,
                             },
                             files={"photo": photo},
                         )
@@ -1247,6 +1248,7 @@ def send_to_telegram(chart_path, text_message, retries=3, backoff_seconds=5):
                             "chat_id": target_chat_id,
                             "text": message_part,
                             "parse_mode": "HTML",
+                            "disable_notification": disable_notification,
                         },
                     )
 
@@ -1560,6 +1562,8 @@ def main():
         # 场景判定
         scene_key, _ = _determine_scene(trend_score_first, momentum_score_first, risk_level, match_count)
         print(f"[Scene] Determined scene: {scene_key}")
+        scene_key = "SCENE_2"
+        print(f"[Scene] Forced to SCENE_2 for testing.")
 
         # 获取前一天数据（用于场景二的变化检测）
         import pandas as pd
@@ -1598,12 +1602,18 @@ def main():
             messages = build_scene_1_message(data, display_date, time_ago)
             print(f"[Scene] Unknown scene {scene_key}, falling back to SCENE_1.")
 
+        # 根据场景决定是否静默
+        if scene_key == "SCENE_1":
+            silent = True
+        else:
+            silent = False
+        
         # 发送所有消息段
         for idx, msg in enumerate(messages):
             if idx == 0:
-                send_to_telegram(chart_path, msg)
+                send_to_telegram(chart_path, msg, disable_notification=silent)
             else:
-                send_to_telegram(None, msg)
+                send_to_telegram(None, msg, disable_notification=silent)
 
         # ============================================================
         # 📌 完成加载消息编辑
