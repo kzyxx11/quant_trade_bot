@@ -1560,8 +1560,6 @@ def main():
         # 场景判定
         scene_key, _ = _determine_scene(trend_score_first, momentum_score_first, risk_level, match_count)
         print(f"[Scene] Determined scene: {scene_key}")
-        scene_key = "SCENE_1"
-        print(f"[Scene] Forced to SCENE_1 for testing.")
 
         # 获取前一天数据（用于场景二的变化检测）
         import pandas as pd
