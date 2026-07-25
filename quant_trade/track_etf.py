@@ -613,12 +613,9 @@ def build_scene_1_message(data, date_str, time_ago_str, recovery_text=""):
 
 {get_ai_summary(trend_score_first, 50, "Low")}
 
-━━━━━━━━━━━━
-
-<i>Show more...</i>
 """
     # 3. 构建每个资产的区块
-    detailed_blocks = []
+    asset_blocks = []
     for ticker, info in data.items():
         df = info["df"]
         close_price = df["Close"].iloc[-1]
@@ -652,9 +649,8 @@ def build_scene_1_message(data, date_str, time_ago_str, recovery_text=""):
                 match_text = f"<b>📚 Historical Match</b>\n(15-year historical comparison)\n\n• {match_count} similar cases\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return (90D): {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
         else:
             match_text = "<b>📚 Historical Match</b>\nInsufficient data"
-            
         # 组装单个资产块
-        block = f"""
+        block = f"""━━━━━━━━━━━━
         
 <b>📈 {asset_name}</b>
 
@@ -669,11 +665,7 @@ RSI (14): {rsi:.1f}
 
 {match_text}
 """
-        detailed_blocks.append(block)
-
-    detailed_content = "\n".join(detailed_blocks)
-
-    full_message = header + f"\n<span class=\"tg-spoiler\">{detailed_content}</span>"
+        asset_blocks.append(block)
     
     # 4. 构建底部（动态 Monitor 和 Daily Insight）
     monitor_text = build_monitor(close_first, ma200_first, 50)  # 用第一个资产的数据，实际可改进
@@ -696,19 +688,16 @@ RSI (14): {rsi:.1f}
 <i>This content is for informational purposes only. It does not constitute financial or investment advice.</i>
 """
     # 5. 组合完整消息
-    full_message += footer
+    full_message = header + "\n".join(asset_blocks) + footer
     
     # 6. 安全检查：如果消息超过 4096 字符，拆分
     if len(full_message) > 4096:
-        # 拆分逻辑：摘要部分 + 第一个资产详细 + 剩余资产
-        first_part = header + f"\n<span class=\"tg-spoiler\">{detailed_blocks[0]}</span>" + footer
-        second_part = "\n".join(detailed_blocks[1:])
-        # 将剩余部分也放在 spoiler 中，但需要单独发送
-        second_part = f"<span class=\"tg-spoiler\">{second_part}</span>" + footer
+        first_part = header + asset_blocks[0] + "\n━━━━━━━━━━━━\n(Message continues in next part)"
+        second_part = "\n".join(asset_blocks[1:]) + footer
         return [first_part, second_part]
     else:
         return [full_message]
-        
+
 def build_scene_2_message(data, date_str, time_ago_str, changes):
     """
     场景二：⚠️ MARKET UPDATE（黄色系，注意感）
