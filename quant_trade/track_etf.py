@@ -1582,8 +1582,8 @@ def main():
         scene_key, _ = _determine_scene(trend_score_first, momentum_score_first, risk_level, match_count)
         print(f"[Scene] Determined scene: {scene_key}")
         
-        scene_key = "SCENE_1"  # 强制本次为正常
-        print("[Test] Forced current scene to SCENE_1.")
+        scene_key = "SCENE_2"  # 强制本次为正常
+        print("[Test] Forced current scene to SCENE_2.")
 
         # 强制模拟上一次状态为 SCENE_3（用于测试恢复提示）
         # 注意：这是测试代码，测试完请删除
