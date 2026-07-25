@@ -37,7 +37,6 @@ jobs:
           CHAT_ID_FROM_PAYLOAD: ${{ github.event.client_payload.chat_id }}
         run: python quant_trade/track_etf.py
 
-      # ========== 新增：失败通知 ==========
       - name: Send failure notification
         if: failure()
         run: |
