@@ -572,7 +572,13 @@ def build_scene_1_message(data, date_str, time_ago_str, recovery_text=""):
     场景一：📊 ETF DAILY REPORT（正常市场，静默推送）
     综合所有资产计算 Market/Risk/DCA/Action
     """
-    # 1. 收集所有资产的趋势分和动量分
+    # 1. 获取第一个资产的 df（用于底部 Monitor 参考）
+    first_ticker = list(data.keys())[0]
+    df_first = data[first_ticker]["df"]
+    close_first = df_first["Close"].iloc[-1]
+    ma200_first = df_first["MA200"].iloc[-1]
+    
+    # 2. 综合计算所有资产的平均趋势分和平均动量分
     trend_scores = []
     momentum_scores = []
     for ticker, info in data.items():
@@ -585,11 +591,10 @@ def build_scene_1_message(data, date_str, time_ago_str, recovery_text=""):
         trend_scores.append(trend_score)
         momentum_scores.append(momentum_score)
     
-    # 2. 计算平均值
     avg_trend = sum(trend_scores) / len(trend_scores)
     avg_momentum = sum(momentum_scores) / len(momentum_scores)
     
-    # 3. 根据平均趋势分确定市场状态
+    # 3. 根据平均值确定市场状态
     if avg_trend >= 70:
         market_status = "Bull Market"
         dca_status = "Normal (100%)"
@@ -601,11 +606,7 @@ def build_scene_1_message(data, date_str, time_ago_str, recovery_text=""):
         dca_status = "Normal (100%)"
         action_status = "Continue Investing"
         action_type = "hold"
-        # 根据动量调整风险
-        if avg_momentum >= 40:
-            risk_level = "Low"
-        else:
-            risk_level = "Moderate"
+        risk_level = "Moderate" if avg_momentum < 40 else "Low"
     else:
         market_status = "Correction / Bear Market"
         dca_status = "Reduce (50-75%)"
@@ -613,7 +614,7 @@ def build_scene_1_message(data, date_str, time_ago_str, recovery_text=""):
         action_type = "wait"
         risk_level = "High" if avg_momentum < 30 else "Moderate"
     
-    # 4. 构建头部（使用综合数据）
+    # 4. 构建头部
     header = f"""
 ━━━━━━━━━━━━
 📊 <b>ETF DAILY REPORT</b>
@@ -631,7 +632,7 @@ def build_scene_1_message(data, date_str, time_ago_str, recovery_text=""):
 {get_ai_summary(avg_trend, avg_momentum, risk_level)}
 
 """
-    # 5. 构建每个资产的详细区块（不变，继续展示每个资产的具体数据）
+    # 5. 构建每个资产的详细区块
     asset_blocks = []
     for ticker, info in data.items():
         df = info["df"]
@@ -660,11 +661,11 @@ def build_scene_1_message(data, date_str, time_ago_str, recovery_text=""):
             avg_return = historical.get("periods", {}).get(90, {}).get("avg_return", 0)
             max_dd = historical.get("periods", {}).get(90, {}).get("max_dd", 0)
             if match_count < SCENE_THRESHOLDS["historical"]["rare_threshold"]:
-                match_text = f"📚 <b>Historical Evidence</b>\n• {match_count} similar cases\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return: {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
+                match_text = f"<b>📚 Historical Evidence</b>\n(15-year historical comparison)\n\n• {match_count} similar cases (limited sample)\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return: {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
             else:
-                match_text = f"📚 <b>Historical Match</b> (15-year comparison)\n• {match_count} similar cases\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return (90D): {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
+                match_text = f"<b>📚 Historical Match</b>\n(15-year historical comparison)\n\n• {match_count} similar cases\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return (90D): {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
         else:
-            match_text = "📚 <b>Historical Match</b>\nInsufficient data"
+            match_text = "<b>📚 Historical Match</b>\nInsufficient data"
         
         block = f"""━━━━━━━━━━━━
 <b>📈 {asset_name}</b>
@@ -683,7 +684,7 @@ RSI (14): {rsi:.1f}
         asset_blocks.append(block)
     
     # 6. 底部
-    monitor_text = build_monitor(close_first, ma200_first, 50)  # 仍使用第一个资产的监控（简化）
+    monitor_text = build_monitor(close_first, ma200_first, 50)  # 使用第一个资产作为参考
     daily_insight = get_daily_insight(action_type)
     
     footer = f"""
@@ -702,9 +703,11 @@ RSI (14): {rsi:.1f}
 
 <i>This content is for informational purposes only. It does not constitute financial or investment advice.</i>
 """
+    
     # 7. 组合消息
     full_message = header + "\n".join(asset_blocks) + footer
     
+    # 8. 安全检查：如果消息超过 4096 字符，拆分
     if len(full_message) > 4096:
         first_part = header + asset_blocks[0] + "\n━━━━━━━━━━━━\n(Message continues in next part)"
         second_part = "\n".join(asset_blocks[1:]) + footer
@@ -715,49 +718,75 @@ RSI (14): {rsi:.1f}
 def build_scene_2_message(data, date_str, time_ago_str, changes):
     """
     场景二：⚠️ MARKET UPDATE（黄色系，注意感）
-    包含 What's Changed 区块，用于显示较前一日的变化
-    changes: dict，包含前一天和当天的关键指标对比
-             例如 {'trend': (80, 75), 'momentum': (45, 30), 'risk': ('Low', 'Moderate')}
+    综合所有资产计算 Market/Risk/DCA/Action
     """
-    # 1. 获取整体市场状态（取第一个资产作为代表）
+    # 1. 获取第一个资产的 df（用于 Monitor）
     first_ticker = list(data.keys())[0]
     df_first = data[first_ticker]["df"]
     close_first = df_first["Close"].iloc[-1]
-    ma50_first = df_first["MA50"].iloc[-1]
     ma200_first = df_first["MA200"].iloc[-1]
-    trend_score_first = calculate_trend_score(close_first, ma50_first, ma200_first)
     
-    if trend_score_first >= 70:
+    # 2. 综合计算所有资产的平均趋势分和平均动量分
+    trend_scores = []
+    momentum_scores = []
+    for ticker, info in data.items():
+        df = info["df"]
+        close_price = df["Close"].iloc[-1]
+        ma50 = df["MA50"].iloc[-1]
+        ma200 = df["MA200"].iloc[-1]
+        trend_score = calculate_trend_score(close_price, ma50, ma200)
+        momentum_score = calculate_momentum_score(df["RSI"])
+        trend_scores.append(trend_score)
+        momentum_scores.append(momentum_score)
+    
+    avg_trend = sum(trend_scores) / len(trend_scores)
+    avg_momentum = sum(momentum_scores) / len(momentum_scores)
+    
+    # 3. 根据平均值确定市场状态（场景二通常建议观望）
+    if avg_trend >= 70:
         market_status = "Bull Market"
         dca_status = "Normal (100%)"
         action_status = "Continue Investing"
-        action_type = "hold"  # 场景二通常建议观望
-    elif trend_score_first >= 50:
+        action_type = "hold"
+        risk_level = "Low"
+    elif avg_trend >= 50:
         market_status = "Constructive"
         dca_status = "Normal (100%)"
         action_status = "Continue Investing"
         action_type = "hold"
+        risk_level = "Moderate" if avg_momentum < 40 else "Low"
     else:
         market_status = "Correction / Bear Market"
         dca_status = "Reduce (50-75%)"
         action_status = "Stay Patient"
         action_type = "wait"
+        risk_level = "High" if avg_momentum < 30 else "Moderate"
     
-    # 2. 构建头部（黄色系标题）
+    # 场景二特有：如果动量下降明显，风险等级上调
+    # 判断从 changes 中获取动量变化
+    if changes and 'momentum' in changes:
+        old_mom, new_mom = changes['momentum']
+        if new_mom < old_mom - 10:  # 动量大幅下降
+            if risk_level == "Low":
+                risk_level = "Moderate"
+            elif risk_level == "Moderate":
+                risk_level = "High"
+    
+    # 4. 构建头部（黄色系标题）
     header = f"""
 ━━━━━━━━━━━━
 ⚠️ <b>MARKET UPDATE</b>
 ━━━━━━━━━━━━
 
 🟡 <b>Market: {market_status}</b>
-🟡 <b>Risk: {changes.get('risk', ('Unknown', 'Unknown'))[1]}</b>
+🟡 <b>Risk: {risk_level}</b>
 💰 <b>DCA: {dca_status}</b>
-📌 <b>Action: {action_status}</b> 
+📌 <b>Action: {action_status}</b>
 
 ━━━━━━━━━━━━
 """
     
-    # 3. What's Changed? 区块
+    # 5. What's Changed? 区块
     change_lines = []
     if changes:
         if 'trend' in changes:
@@ -780,7 +809,7 @@ def build_scene_2_message(data, date_str, time_ago_str, changes):
     
     header += changes_block + "\n\n━━━━━━━━━━━━\n"
     
-    # 4. AI Summary（场景二风格）
+    # 6. AI Summary（场景二风格）
     ai_summary = f"""
 <b>🧠 AI Summary</b>
 
@@ -791,7 +820,7 @@ No action is recommended at this stage.
 """
     header += ai_summary
     
-    # 5. 资产数据块（与场景一相同，但可以去掉Historical Match的详细说明，只保留核心数据）
+    # 7. 资产数据块（保持不变，逐个展示）
     asset_blocks = []
     for ticker, info in data.items():
         df = info["df"]
@@ -813,7 +842,7 @@ No action is recommended at this stage.
         trend_color = "🟢" if trend_score >= 70 else ("🟠" if trend_score >= 50 else "🔴")
         momentum_color = "🟢" if momentum_score >= 50 else ("🟠" if momentum_score >= 30 else "🔴")
         
-        # 历史统计（场景二仍使用 Historical Match）
+        # 历史统计（场景二用 Historical Match）
         if "error" not in historical:
             match_count = historical.get("match_count", 0)
             win_rate_90d = historical.get("periods", {}).get(90, {}).get("win_rate", 0)
@@ -840,8 +869,8 @@ RSI (14): {rsi:.1f}
 """
         asset_blocks.append(block)
     
-    # 6. 底部（Monitor 和 Daily Insight 同场景一，但可以强调关注点）
-    monitor_text = build_monitor(close_first, ma200_first, 50)  # 复用
+    # 8. 底部（Monitor 和 Daily Insight）
+    monitor_text = build_monitor(close_first, ma200_first, 50)  # 使用第一个资产作为参考
     daily_insight = "Conditions are changing. Maintain flexibility and avoid large new positions."
     
     footer = f"""
@@ -872,44 +901,74 @@ RSI (14): {rsi:.1f}
 def build_scene_3_message(data, date_str, time_ago_str):
     """
     场景三：🚨 MARKET ALERT（红色系，警报感）
-    触发条件：Risk=High 且 Trend 偏低（<50）
-    推送方式：带震动提醒
+    综合所有资产计算 Market/Risk/DCA/Action
+    触发条件：Risk=High 且 Trend 偏低
     """
-    # 1. 获取整体市场状态（取第一个资产作为代表）
+    # 1. 获取第一个资产的 df（用于 Monitor）
     first_ticker = list(data.keys())[0]
     df_first = data[first_ticker]["df"]
     close_first = df_first["Close"].iloc[-1]
-    ma50_first = df_first["MA50"].iloc[-1]
     ma200_first = df_first["MA200"].iloc[-1]
-    trend_score_first = calculate_trend_score(close_first, ma50_first, ma200_first)
     
-    # 场景三通常出现在趋势转弱时
-    if trend_score_first >= 50:
-        market_status = "Correction"
-        dca_status = "Reduce (50-75%)"
-        action_status = "Stay Patient"
-        action_type = "wait"
+    # 2. 综合计算所有资产的平均趋势分和平均动量分
+    trend_scores = []
+    momentum_scores = []
+    for ticker, info in data.items():
+        df = info["df"]
+        close_price = df["Close"].iloc[-1]
+        ma50 = df["MA50"].iloc[-1]
+        ma200 = df["MA200"].iloc[-1]
+        trend_score = calculate_trend_score(close_price, ma50, ma200)
+        momentum_score = calculate_momentum_score(df["RSI"])
+        trend_scores.append(trend_score)
+        momentum_scores.append(momentum_score)
+    
+    avg_trend = sum(trend_scores) / len(trend_scores)
+    avg_momentum = sum(momentum_scores) / len(momentum_scores)
+    
+    # 3. 场景三专用：根据平均值确定市场状态（通常为 Correction / Bear Market）
+    if avg_trend >= 70:
+        market_status = "Bull Market"
+        dca_status = "Normal (100%)"
+        action_status = "Continue Investing"
+        action_type = "hold"
+        risk_level = "Low"
+    elif avg_trend >= 50:
+        market_status = "Constructive"
+        dca_status = "Normal (100%)"
+        action_status = "Continue Investing"
+        action_type = "hold"
+        risk_level = "Moderate" if avg_momentum < 40 else "Low"
     else:
         market_status = "Bear Market"
         dca_status = "Reduce (25-50%)"
         action_status = "Stay Patient"
         action_type = "wait"
+        risk_level = "High"
     
-    # 2. 构建头部（红色系标题）
+    # 如果趋势小于 50，强制为 Bear Market（覆盖上面可能出现的 Constructive）
+    if avg_trend < 50:
+        market_status = "Bear Market"
+        dca_status = "Reduce (25-50%)"
+        action_status = "Stay Patient"
+        action_type = "wait"
+        risk_level = "High"
+    
+    # 4. 构建头部（红色系标题）
     header = f"""
 ━━━━━━━━━━━━
 🚨 <b>MARKET ALERT</b>
 ━━━━━━━━━━━━
 
 🔴 <b>Market: {market_status}</b>
-🔴 <b>Risk: High</b>
+🔴 <b>Risk: {risk_level}</b>
 💰 <b>DCA: {dca_status}</b>
 📌 <b>Action: {action_status}</b>
 
 ━━━━━━━━━━━━
 """
     
-    # 3. Why this report? 区块
+    # 5. Why this report? 区块
     why_text = """
 🆕 <b>Why this report?</b>
 
@@ -921,7 +980,7 @@ This is not a typical pullback.
 """
     header += why_text
     
-    # 4. AI Summary（场景三风格）
+    # 6. AI Summary（场景三风格）
     ai_summary = f"""
 <b>🧠 AI Summary</b>
 
@@ -933,7 +992,7 @@ Short-term volatility is expected.
 """
     header += ai_summary
     
-    # 5. 资产数据块（场景三使用 Historical Evidence）
+    # 7. 资产数据块（场景三用 Historical Evidence）
     asset_blocks = []
     for ticker, info in data.items():
         df = info["df"]
@@ -955,7 +1014,6 @@ Short-term volatility is expected.
         trend_color = "🟢" if trend_score >= 70 else ("🟠" if trend_score >= 50 else "🔴")
         momentum_color = "🟢" if momentum_score >= 50 else ("🟠" if momentum_score >= 30 else "🔴")
         
-        # 历史统计（场景三用 Historical Evidence）
         if "error" not in historical:
             match_count = historical.get("match_count", 0)
             win_rate_90d = historical.get("periods", {}).get(90, {}).get("win_rate", 0)
@@ -966,7 +1024,8 @@ Short-term volatility is expected.
                 match_text += "\n\n⚠️ <i>Very limited sample size. Use extra caution when interpreting.</i>"
             elif match_count < 50:
                 match_text += "\n\n<i>Limited sample size. Interpret with care.</i>"
-            # 50 以上不显示任何警告
+        else:
+            match_text = "<b>📚 Historical Evidence</b>\nInsufficient data"
         
         block = f"""━━━━━━━━━━━━
 
@@ -985,7 +1044,7 @@ RSI (14): {rsi:.1f}
 """
         asset_blocks.append(block)
     
-    # 6. 底部（场景三/四使用 Expect volatility + Recommended Action）
+    # 8. 底部（场景三使用 Expect volatility + Recommended Action）
     footer = f"""
 ━━━━━━━━━━━━
 
@@ -1014,38 +1073,53 @@ Stay patient. Avoid adding new positions until trend confirms recovery.
 def build_scene_4_message(data, date_str, time_ago_str):
     """
     场景四：🚨 SPECIAL REPORT（红色系+特殊感）
-    触发条件：极端稀有（十年/百年一遇级别），样本极少
-    推送方式：带震动提醒，DCA 可提至 200%+
+    综合所有资产计算 Market/Risk/DCA/Action
+    触发条件：极端稀有（十年/百年一遇级别）
     """
-    # 1. 获取整体市场状态（取第一个资产作为代表）
+    # 1. 获取第一个资产的 df（用于 Monitor）
     first_ticker = list(data.keys())[0]
     df_first = data[first_ticker]["df"]
     close_first = df_first["Close"].iloc[-1]
-    ma50_first = df_first["MA50"].iloc[-1]
     ma200_first = df_first["MA200"].iloc[-1]
-    trend_score_first = calculate_trend_score(close_first, ma50_first, ma200_first)
     
-    # 场景四极端情况，DCA 可提至 200%+
+    # 2. 综合计算所有资产的平均趋势分和平均动量分
+    trend_scores = []
+    momentum_scores = []
+    for ticker, info in data.items():
+        df = info["df"]
+        close_price = df["Close"].iloc[-1]
+        ma50 = df["MA50"].iloc[-1]
+        ma200 = df["MA200"].iloc[-1]
+        trend_score = calculate_trend_score(close_price, ma50, ma200)
+        momentum_score = calculate_momentum_score(df["RSI"])
+        trend_scores.append(trend_score)
+        momentum_scores.append(momentum_score)
+    
+    avg_trend = sum(trend_scores) / len(trend_scores)
+    avg_momentum = sum(momentum_scores) / len(momentum_scores)
+    
+    # 3. 场景四极端情况：直接固定为 Bear Market，DCA 200%+
     market_status = "Bear Market"
     dca_status = "200%+"
     action_status = "Aggressive Accumulation"
     action_type = "buy"
+    risk_level = "Extreme"
     
-    # 2. 构建头部（红色系+特殊感标题）
+    # 4. 构建头部（红色系+特殊感标题）
     header = f"""
 ━━━━━━━━━━━━
 🚨 <b>SPECIAL REPORT</b>
 ━━━━━━━━━━━━
 
 🔴 <b>Market: {market_status}</b>
-🔴 <b>Risk: Extreme</b>
+🔴 <b>Risk: {risk_level}</b>
 💰 <b>DCA: {dca_status}</b>
 📌 <b>Action: {action_status}</b>
 
 ━━━━━━━━━━━━
 """
     
-    # 3. Why this report? 区块（场景四强调极端稀有）
+    # 5. Why this report? 区块（强调极端稀有）
     why_text = """
 🆕 <b>Why this report?</b>
 
@@ -1057,7 +1131,7 @@ This is a generational event.
 """
     header += why_text
     
-    # 4. AI Summary（场景四风格）
+    # 6. AI Summary（场景四风格）
     ai_summary = f"""
 <b>🧠 AI Summary</b>
 
@@ -1068,7 +1142,7 @@ Short-term volatility is expected. Maintain your long-term plan.
 """
     header += ai_summary
     
-    # 5. 资产数据块（场景四使用 Historical Evidence，且强调样本量小）
+    # 7. 资产数据块（场景四用 Evidence，强制显示样本量警告）
     asset_blocks = []
     for ticker, info in data.items():
         df = info["df"]
@@ -1090,7 +1164,6 @@ Short-term volatility is expected. Maintain your long-term plan.
         trend_color = "🟢" if trend_score >= 70 else ("🟠" if trend_score >= 50 else "🔴")
         momentum_color = "🟢" if momentum_score >= 50 else ("🟠" if momentum_score >= 30 else "🔴")
         
-        # 历史统计（场景四用 Evidence，且强制显示样本量警告）
         if "error" not in historical:
             match_count = historical.get("match_count", 0)
             win_rate_90d = historical.get("periods", {}).get(90, {}).get("win_rate", 0)
@@ -1101,7 +1174,8 @@ Short-term volatility is expected. Maintain your long-term plan.
                 match_text += "\n\n⚠️ <i>Very limited sample size. Use extra caution when interpreting.</i>"
             elif match_count < 50:
                 match_text += "\n\n<i>Limited sample size. Interpret with care.</i>"
-            # 50 以上不显示任何警告
+        else:
+            match_text = "<b>📚 Historical Evidence</b>\nInsufficient data"
         
         block = f"""━━━━━━━━━━━━
 
@@ -1120,7 +1194,7 @@ RSI (14): {rsi:.1f}
 """
         asset_blocks.append(block)
     
-    # 6. 底部（场景四的 Recommended Action 更激进）
+    # 8. 底部（场景四的 Recommended Action 更激进）
     footer = f"""
 ━━━━━━━━━━━━
 
@@ -1697,7 +1771,7 @@ def main():
 
     except Exception as e:
         error_msg = str(e)[:200]
-        edit_loading_message(chat_id_for_edit, message_id, error=error_msg)
+        edit_loading_message(chat_id_for_edit, message_id, 0, error=error_msg)
         print(f"[Fatal Error] {e}")
         raise
 
