@@ -85,52 +85,38 @@ _scene_history = []
 _SCENE_HISTORY_MAX = 5  # 连续 5 次采样确认后才切换场景
 
 def _determine_scene(trend_score, momentum_score, risk_level, match_count):
-    """
-    核心场景判定引擎，含防抖动逻辑。
-    返回 scene_key (SCENE_1/2/3/4) 和判定依据。
-    """
     global _scene_history
     
-    # 1. 基础判定（基于当前数据）
+    # 1. 基础判定：优先看风险，样本少只影响场景四
     if match_count < SCENE_THRESHOLDS["historical"]["very_rare_threshold"]:
         raw_scene = "SCENE_4"
-    elif match_count < SCENE_THRESHOLDS["historical"]["rare_threshold"]:
+    elif risk_level == "High" and trend_score < SCENE_THRESHOLDS["trend"]["bull_min"]:
         raw_scene = "SCENE_3"
-    elif (risk_level == "High" and 
-          trend_score < SCENE_THRESHOLDS["trend"]["bull_min"]):
-        raw_scene = "SCENE_3"
-    elif (momentum_score < SCENE_THRESHOLDS["momentum"]["alert_threshold"] or
-          risk_level == "Moderate"):
+    elif momentum_score < SCENE_THRESHOLDS["momentum"]["alert_threshold"] or risk_level == "Moderate":
         raw_scene = "SCENE_2"
     else:
         raw_scene = "SCENE_1"
     
-    # 2. 防抖动：缓冲带检查
-    # 如果 Momentum 在缓冲带内，不轻易切换
+    # 2. 缓冲带防抖动（不变）
     if (SCENE_THRESHOLDS["momentum"]["buffer_zone"][0] <= momentum_score <= 
         SCENE_THRESHOLDS["momentum"]["buffer_zone"][1]):
-        # 如果有历史记录，保持上次场景，不切换
         if _scene_history:
             return _scene_history[-1], {"reason": "Buffer zone, holding previous scene"}
     
-    # 3. 记录历史并判断是否达到切换阈值
+    # 3. 历史采样防抖动（不变）
     _scene_history.append(raw_scene)
     if len(_scene_history) > _SCENE_HISTORY_MAX:
         _scene_history.pop(0)
     
-    # 统计最近 N 次中 raw_scene 的出现次数
     if len(_scene_history) >= _SCENE_HISTORY_MAX:
         counts = {}
         for s in _scene_history:
             counts[s] = counts.get(s, 0) + 1
-        # 如果 raw_scene 出现次数 >= 3，切换
         if counts.get(raw_scene, 0) >= 3:
             return raw_scene, {"reason": f"Confirmed over {_SCENE_HISTORY_MAX} samples"}
         else:
-            # 未达到切换阈值，返回上一个稳定场景
             return _scene_history[-2] if len(_scene_history) >= 2 else "SCENE_1", {"reason": "Not enough samples"}
     else:
-        # 历史不足，返回当前判定结果
         return raw_scene, {"reason": "Initial判定"}
 
 def escape_html(text):
@@ -971,8 +957,8 @@ def build_scene_3_message(data, date_str, time_ago_str):
 🚨 <b>MARKET ALERT</b>
 ━━━━━━━━━━━━
 
-🔴 <b>Market: {market_status}</b>
-🔴 <b>Risk: {risk_level}</b>
+{market_emoji} <b>Market: {market_status}</b>
+{risk_emoji} <b>Risk: {risk_level}</b>
 💰 <b>DCA: {dca_status}</b>
 📌 <b>Action: {action_status}</b>
 
@@ -1022,8 +1008,8 @@ Short-term volatility is expected.
         asset_name = escape_html(info["name"])
         symbol = escape_html(info["symbol"])
         
-        trend_color = "🟢" if trend_score >= 70 else ("🟠" if trend_score >= 50 else "🔴")
-        momentum_color = "🟢" if momentum_score >= 50 else ("🟠" if momentum_score >= 30 else "🔴")
+        market_emoji = "🟢" if avg_trend >= 70 else ("🟠" if avg_trend >= 50 else "🔴")
+        risk_emoji = "🟢" if risk_level == "Low" else ("🟠" if risk_level == "Moderate" else "🔴")
         
         if "error" not in historical:
             match_count = historical.get("match_count", 0)
@@ -1122,8 +1108,8 @@ def build_scene_4_message(data, date_str, time_ago_str):
 🚨 <b>SPECIAL REPORT</b>
 ━━━━━━━━━━━━
 
-🔴 <b>Market: {market_status}</b>
-🔴 <b>Risk: {risk_level}</b>
+{market_emoji} <b>Market: {market_status}</b>
+{risk_emoji} <b>Risk: {risk_level}</b>
 💰 <b>DCA: {dca_status}</b>
 📌 <b>Action: {action_status}</b>
 
@@ -1172,8 +1158,8 @@ Short-term volatility is expected. Maintain your long-term plan.
         asset_name = escape_html(info["name"])
         symbol = escape_html(info["symbol"])
         
-        trend_color = "🟢" if trend_score >= 70 else ("🟠" if trend_score >= 50 else "🔴")
-        momentum_color = "🟢" if momentum_score >= 50 else ("🟠" if momentum_score >= 30 else "🔴")
+        market_emoji = "🟢" if avg_trend >= 70 else ("🟠" if avg_trend >= 50 else "🔴")
+        risk_emoji = "🟢" if risk_level == "Low" else ("🟠" if risk_level == "Moderate" else "🔴")
         
         if "error" not in historical:
             match_count = historical.get("match_count", 0)
