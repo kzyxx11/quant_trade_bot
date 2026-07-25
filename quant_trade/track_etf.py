@@ -668,7 +668,7 @@ MA50: {symbol}{ma50:.2f}
 MA200: {symbol}{ma200:.2f}
 RSI (14): {rsi:.1f}
 
-{match_text}
+{match_display}
 """
         asset_blocks.append(block)
     
@@ -1688,7 +1688,7 @@ def main():
 
     except Exception as e:
         error_msg = str(e)[:200]
-        edit_loading_message(chat_id_for_edit, message_id, error=error_msg)
+        edit_loading_message(chat_id_for_edit, message_id, 0, error=error_msg)
         print(f"[Fatal Error] {e}")
         raise
 
