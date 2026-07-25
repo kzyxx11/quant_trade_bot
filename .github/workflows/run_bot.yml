@@ -49,7 +49,7 @@ jobs:
             -H "Content-Type: application/json" \
             -d "{
               \"chat_id\": \"${{ secrets.TG_CHAT_ID }}\",
-              \"text\": \"⚠️ *ETF Trend Monitor - Daily Run Failed*\n\nPlease check the Actions log for details:\nhttps://github.com/kzyxx11/quant_trade_bot/actions/runs/${{ github.run_id }}\",
+              \"text\": \"⚠️ *ETF Trend Monitor - Daily Run Failed*\n\nPlease check the Actions log for details:\n\`https://github.com/kzyxx11/quant_trade_bot/actions/runs/${{ github.run_id }}\`\",
               \"parse_mode\": \"Markdown\"
             }"
           
