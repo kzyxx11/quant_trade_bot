@@ -597,13 +597,11 @@ def build_scene_1_message(data, date_str, time_ago_str, recovery_text=""):
         action_type = "wait"
     
     # 2. 构建头部（使用 <b> 加粗，标签+值格式对齐）
-    header = f"""
-━━━━━━━━━━━━
+    recovery_line = f"{recovery_text}\n" if recovery_text else ""
+    header = f"""━━━━━━━━━━━━
 📊 <b>ETF DAILY REPORT</b>
 ━━━━━━━━━━━━
-{recovery_text}
-
-🟢 <b>Market: {market_status}</b>
+{recovery_line}🟢 <b>Market: {market_status}</b>
 🟢 <b>Risk: Low</b>
 💰 <b>DCA: {dca_status}</b>
 📌 <b>Action: {action_status}</b>
