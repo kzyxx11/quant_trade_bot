@@ -601,6 +601,7 @@ def build_scene_1_message(data, date_str, time_ago_str, recovery_text=""):
     header = f"""━━━━━━━━━━━━
 📊 <b>ETF DAILY REPORT</b>
 ━━━━━━━━━━━━
+
 {recovery_line}🟢 <b>Market: {market_status}</b>
 🟢 <b>Risk: Low</b>
 💰 <b>DCA: {dca_status}</b>
@@ -1580,6 +1581,19 @@ def main():
         # 场景判定
         scene_key, _ = _determine_scene(trend_score_first, momentum_score_first, risk_level, match_count)
         print(f"[Scene] Determined scene: {scene_key}")
+
+        scene_key = "SCENE_1"  # 强制本次为正常
+        print("[Test] Forced current scene to SCENE_1.")
+        
+        # 强制模拟上一次状态为 SCENE_3（用于测试恢复提示）
+        # 注意：这是测试代码，测试完请删除
+        from pathlib import Path
+        import json
+        test_state_path = Path("docs/last_scene.json")
+        if not test_state_path.exists() or True:  # 每次覆盖
+            with open(test_state_path, "w") as f:
+                json.dump({"scene": "SCENE_3", "date": "2026-07-01"}, f)
+            print("[Test] Forced last scene to SCENE_3 for recovery test.")
         
         # ---- 恢复检测 ----
         last_state = load_last_scene()
