@@ -41,6 +41,26 @@ jobs:
         if: failure()
         run: |
           echo "Repository: ${{ github.repository }}"
+
+      - name: Send failure notification
+        if: failure()
+        env:
+          CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          REPO_NAME: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          SERVER_URL: ${{ github.server_url }}
+        run: |
+          # 构建完整的通知消息和 URL
+          MESSAGE="⚠️ *ETF Trend Monitor - Daily Run Failed*
+
+          Please check the Actions log for details:
+          ${SERVER_URL}/${REPO_NAME}/actions/runs/${RUN_ID}"
+    
+          # 使用环境变量构建 JSON，然后发送
+          curl -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            -H "Content-Type: application/json" \
+            -d "{\"chat_id\":\"${CHAT_ID}\",\"text\":\"${MESSAGE}\",\"parse_mode\":\"Markdown\"}"
           
       - name: Commit and Push Dashboard
         run: |
