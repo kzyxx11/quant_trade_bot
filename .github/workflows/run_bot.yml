@@ -41,22 +41,7 @@ jobs:
         if: failure()
         run: |
           echo "Repository: ${{ github.repository }}"
-
-      - name: Send failure notification
-        if: failure()
-        env:
-          REPO_NAME: ${{ github.repository }}
-          RUN_ID: ${{ github.run_id }}
-          SERVER_URL: ${{ github.server_url }}
-        run: |
-          jq -n \
-            --arg chat_id "${{ secrets.TG_CHAT_ID }}" \
-            --arg text "⚠️ *ETF Trend Monitor - Daily Run Failed*\n\nPlease check the Actions log for details:\n$SERVER_URL/$REPO_NAME/actions/runs/$RUN_ID" \
-            '{"chat_id": $chat_id, "text": $text, "parse_mode": "Markdown"}' \
-            | curl -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
-            -H "Content-Type: application/json" \
-            -d @-
-
+          
       - name: Commit and Push Dashboard
         run: |
           git config --local user.email "actions@github.com"
