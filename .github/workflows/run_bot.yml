@@ -49,13 +49,13 @@ jobs:
           RUN_ID: ${{ github.run_id }}
           SERVER_URL: ${{ github.server_url }}
         run: |
-          curl -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
+          jq -n \
+            --arg chat_id "${{ secrets.TG_CHAT_ID }}" \
+            --arg text "⚠️ *ETF Trend Monitor - Daily Run Failed*\n\nPlease check the Actions log for details:\n$SERVER_URL/$REPO_NAME/actions/runs/$RUN_ID" \
+            '{"chat_id": $chat_id, "text": $text, "parse_mode": "Markdown"}' \
+            | curl -X POST "https://api.telegram.org/bot${{ secrets.TG_BOT_TOKEN }}/sendMessage" \
             -H "Content-Type: application/json" \
-            -d '{
-              "chat_id": "${{ secrets.TG_CHAT_ID }}",
-              "text": "⚠️ *ETF Trend Monitor - Daily Run Failed*\n\nPlease check the Actions log for details:\n'"$SERVER_URL/$REPO_NAME/actions/runs/$RUN_ID"'",
-              "parse_mode": "Markdown"
-            }'
+            -d @-
 
       - name: Commit and Push Dashboard
         run: |
