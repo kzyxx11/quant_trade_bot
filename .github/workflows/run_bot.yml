@@ -51,20 +51,16 @@ jobs:
           RUN_ID: ${{ github.run_id }}
           SERVER_URL: ${{ github.server_url }}
         run: |
-          # 使用 jq 安全地构建 JSON，完全避免 shell 转义问题
-          MESSAGE="⚠️ *ETF Trend Monitor - Daily Run Failed*
+          TEXT="⚠️ ETF Trend Monitor - Daily Run Failed
 
           Please check the Actions log for details:
           ${SERVER_URL}/${REPO_NAME}/actions/runs/${RUN_ID}"
-
-          # 用 jq 构建 JSON 负载，然后用 curl 发送
-          echo "${MESSAGE}" | jq -R -s '{
-            chat_id: $ENV.CHAT_ID,
-            text: .,
-            parse_mode: "Markdown"
-          }' | curl -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-            -H "Content-Type: application/json" \
-            -d @-
+    
+          curl -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            --data-urlencode "chat_id=${CHAT_ID}" \
+            --data-urlencode "text=${TEXT}" \
+            --data-urlencode "parse_mode=Markdown"
           
       - name: Commit and Push Dashboard
         run: |
