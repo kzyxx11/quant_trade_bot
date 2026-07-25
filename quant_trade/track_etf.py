@@ -643,17 +643,12 @@ def build_scene_1_message(data, date_str, time_ago_str, recovery_text=""):
             win_rate_90d = historical.get("periods", {}).get(90, {}).get("win_rate", 0)
             avg_return = historical.get("periods", {}).get(90, {}).get("avg_return", 0)
             max_dd = historical.get("periods", {}).get(90, {}).get("max_dd", 0)
-            
-            # 构建详细数据（放在 spoiler 内）
-            detailed = f"• {match_count} similar cases\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return (90D): {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
-            
             if match_count < SCENE_THRESHOLDS["historical"]["rare_threshold"]:
-                match_display = f"📚 <b>Historical Evidence</b> (点击查看)\n<span class=\"tg-spoiler\">{detailed}</span>"
+                match_text = f"<b>📚 Historical Evidence</b>\n\n• {match_count} similar cases\n• 90-Day Win Rate: {win_rate_90d:.1f}%\n• Avg Return: {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
             else:
-                match_display = f"📚 <b>Historical Match</b> (15-year historical comparison) (点击查看)\n<span class=\"tg-spoiler\">{detailed}</span>"
+                match_text = f"<b>📚 Historical Match</b>\n(15-year historical comparison)\n\n• {match_count} similar cases\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return (90D): {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
         else:
-            match_display = "📚 <b>Historical Match</b>\nInsufficient data"
-            
+            match_text = "<b>📚 Historical Match</b>\nInsufficient data"
         # 组装单个资产块
         block = f"""━━━━━━━━━━━━
         
@@ -668,7 +663,7 @@ MA50: {symbol}{ma50:.2f}
 MA200: {symbol}{ma200:.2f}
 RSI (14): {rsi:.1f}
 
-{match_display}
+{match_text}
 """
         asset_blocks.append(block)
     
@@ -1586,7 +1581,7 @@ def main():
         # 场景判定
         scene_key, _ = _determine_scene(trend_score_first, momentum_score_first, risk_level, match_count)
         print(f"[Scene] Determined scene: {scene_key}")
-
+        
         # ---- 恢复检测 ----
         last_state = load_last_scene()
         is_recovery = False
@@ -1688,7 +1683,7 @@ def main():
 
     except Exception as e:
         error_msg = str(e)[:200]
-        edit_loading_message(chat_id_for_edit, message_id, 0, error=error_msg)
+        edit_loading_message(chat_id_for_edit, message_id, error=error_msg)
         print(f"[Fatal Error] {e}")
         raise
 
