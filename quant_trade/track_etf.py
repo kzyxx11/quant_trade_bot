@@ -1609,7 +1609,6 @@ def generate_html(data, date_str):
     return html_template
     
 def main():
-    raise Exception("Test final")
     # 读取可能从 Worker 传来的 message_id
     message_id = os.getenv("MESSAGE_ID")
     chat_id_from_payload = os.getenv("CHAT_ID_FROM_PAYLOAD")
