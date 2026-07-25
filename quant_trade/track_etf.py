@@ -1623,10 +1623,11 @@ def main():
         edit_loading_message(chat_id_for_edit, message_id, 0)
 
         data = fetch_etf_data()
+        
+        # === 数据源失败 fallback ===
         if not data:
             print("No data fetched. Exiting.")
             edit_loading_message(chat_id_for_edit, message_id, error="No data from Yahoo Finance.")
-            # 发送 fallback 消息
             fallback_msg = (
                 "⚠️ <b>Data Service Unavailable</b>\n\n"
                 "Unable to fetch market data at this time.\n"
@@ -1636,23 +1637,22 @@ def main():
                 "• Rate limit exceeded\n\n"
                 "Please try again in a few minutes.\n"
                 "If the issue persists, contact support."
-        )
+            )
             send_to_telegram(None, fallback_msg, disable_notification=False)
             return
-
-    # 如果是错误字典
-    if isinstance(data, dict) and "error" in data:
-        error_msg = data["error"]
-        print(f"No data fetched: {error_msg}")
-        edit_loading_message(chat_id_for_edit, message_id, error=error_msg)
-        fallback_msg = (
-            f"⚠️ <b>Data Service Unavailable</b>\n\n"
-            f"{error_msg}\n\n"
-            "Please try again in a few minutes.\n"
-            "If the issue persists, contact support."
-        )
-        send_to_telegram(None, fallback_msg, disable_notification=False)
-        return
+        
+        if isinstance(data, dict) and "error" in data:
+            error_msg = data["error"]
+            print(f"No data fetched: {error_msg}")
+            edit_loading_message(chat_id_for_edit, message_id, error=error_msg)
+            fallback_msg = (
+                f"⚠️ <b>Data Service Unavailable</b>\n\n"
+                f"{error_msg}\n\n"
+                "Please try again in a few minutes.\n"
+                "If the issue persists, contact support."
+            )
+            send_to_telegram(None, fallback_msg, disable_notification=False)
+            return
 
         # 步骤1：数据加载完成
         edit_loading_message(chat_id_for_edit, message_id, 1)
@@ -1675,9 +1675,8 @@ def main():
         edit_loading_message(chat_id_for_edit, message_id, 4)
 
         # ============================================================
-        # 📌 场景判定 + 消息分发（替换原来的 build_scene_1_message 调用）
+        # 📌 场景判定 + 消息分发
         # ============================================================
-        # 从第一个资产获取数据用于场景判定
         first_ticker = list(data.keys())[0]
         df_first = data[first_ticker]["df"]
         close_first = df_first["Close"].iloc[-1]
@@ -1686,7 +1685,6 @@ def main():
         trend_score_first = calculate_trend_score(close_first, ma50_first, ma200_first)
         momentum_score_first = calculate_momentum_score(df_first["RSI"])
 
-        # 计算风险等级
         if trend_score_first >= 70:
             risk_level = "Low"
         elif trend_score_first >= 50:
@@ -1694,7 +1692,6 @@ def main():
         else:
             risk_level = "High"
 
-        # 获取历史匹配次数（用于场景判定）
         historical_first = run_historical_analysis(
             df=data[first_ticker]["df_full"],
             current_trend_score=trend_score_first,
@@ -1702,10 +1699,9 @@ def main():
         )
         match_count = historical_first.get("match_count", 100)
 
-        # 场景判定
         scene_key, _ = _determine_scene(trend_score_first, momentum_score_first, risk_level, match_count)
         print(f"[Scene] Determined scene: {scene_key}")
-        
+
         # ---- 恢复检测 ----
         last_state = load_last_scene()
         is_recovery = False
@@ -1727,7 +1723,7 @@ def main():
                     recovery_message = "✅ Market has returned to normal from the alert state yesterday."
                 else:
                     recovery_message = f"✅ Market has returned to normal from the alert state {days_ago} days ago."
-        
+
         # 获取前一天数据（用于场景二的变化检测）
         import pandas as pd
         history_path = Path("docs/history.csv")
@@ -1748,7 +1744,6 @@ def main():
             except Exception as e:
                 print(f"[Scene] Could not read history for changes: {e}")
 
-        # 根据场景选择消息构建函数
         display_date = datetime.now(tz_gmt8).strftime("%Y-%m-%d %H:%M")
         time_ago = "Just now"
 
@@ -1761,24 +1756,18 @@ def main():
         elif scene_key == "SCENE_4":
             messages = build_scene_4_message(data, display_date, time_ago)
         else:
-            # 未知场景，回退到场景一
             messages = build_scene_1_message(data, display_date, time_ago)
             print(f"[Scene] Unknown scene {scene_key}, falling back to SCENE_1.")
 
-        # 根据场景决定是否静默
-        if scene_key == "SCENE_1":
-            silent = True
-        else:
-            silent = False
+        silent = (scene_key == "SCENE_1")
         
-        # 发送所有消息段
         for idx, msg in enumerate(messages):
             if idx == 0:
                 send_to_telegram(chart_path, msg, disable_notification=silent)
             else:
                 send_to_telegram(None, msg, disable_notification=silent)
 
-        # 保存当前场景状态（供下次使用）
+        # 保存当前场景状态
         today_str = datetime.now(tz_gmt8).strftime("%Y-%m-%d")
         save_last_scene(scene_key, today_str)
 
