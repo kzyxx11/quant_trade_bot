@@ -37,6 +37,11 @@ jobs:
           CHAT_ID_FROM_PAYLOAD: ${{ github.event.client_payload.chat_id }}
         run: python quant_trade/track_etf.py
 
+      - name: Debug repository name
+        if: failure()
+        run: |
+          echo "Repository: ${{ github.repository }}"
+
       - name: Send failure notification
         if: failure()
         run: |
