@@ -570,40 +570,57 @@ def build_monitor(close_price, ma200, momentum_score):
 def build_scene_1_message(data, date_str, time_ago_str, recovery_text=""):
     """
     场景一：📊 ETF DAILY REPORT（正常市场，静默推送）
-    符合所有新格式要求：英文、加粗、分隔线缩短、标签对齐、无星号、动态相对时间
+    综合所有资产计算 Market/Risk/DCA/Action
     """
-    # 1. 获取整体市场状态（取第一个资产作为代表）
-    first_ticker = list(data.keys())[0]
-    df_first = data[first_ticker]["df"]
-    close_first = df_first["Close"].iloc[-1]
-    ma50_first = df_first["MA50"].iloc[-1]
-    ma200_first = df_first["MA200"].iloc[-1]
-    trend_score_first = calculate_trend_score(close_first, ma50_first, ma200_first)
+    # 1. 收集所有资产的趋势分和动量分
+    trend_scores = []
+    momentum_scores = []
+    for ticker, info in data.items():
+        df = info["df"]
+        close_price = df["Close"].iloc[-1]
+        ma50 = df["MA50"].iloc[-1]
+        ma200 = df["MA200"].iloc[-1]
+        trend_score = calculate_trend_score(close_price, ma50, ma200)
+        momentum_score = calculate_momentum_score(df["RSI"])
+        trend_scores.append(trend_score)
+        momentum_scores.append(momentum_score)
     
-    if trend_score_first >= 70:
+    # 2. 计算平均值
+    avg_trend = sum(trend_scores) / len(trend_scores)
+    avg_momentum = sum(momentum_scores) / len(momentum_scores)
+    
+    # 3. 根据平均趋势分确定市场状态
+    if avg_trend >= 70:
         market_status = "Bull Market"
         dca_status = "Normal (100%)"
         action_status = "Continue Investing"
         action_type = "buy"
-    elif trend_score_first >= 50:
+        risk_level = "Low"
+    elif avg_trend >= 50:
         market_status = "Constructive"
         dca_status = "Normal (100%)"
         action_status = "Continue Investing"
         action_type = "hold"
+        # 根据动量调整风险
+        if avg_momentum >= 40:
+            risk_level = "Low"
+        else:
+            risk_level = "Moderate"
     else:
         market_status = "Correction / Bear Market"
         dca_status = "Reduce (50-75%)"
         action_status = "Stay Patient"
         action_type = "wait"
+        risk_level = "High" if avg_momentum < 30 else "Moderate"
     
-    # 2. 构建头部（使用 <b> 加粗，标签+值格式对齐）
+    # 4. 构建头部（使用综合数据）
     header = f"""
 ━━━━━━━━━━━━
 📊 <b>ETF DAILY REPORT</b>
 ━━━━━━━━━━━━
 {recovery_text}
 🟢 <b>Market: {market_status}</b>
-🟢 <b>Risk: Low</b>
+🟢 <b>Risk: {risk_level}</b>
 💰 <b>DCA: {dca_status}</b>
 📌 <b>Action: {action_status}</b>
 
@@ -611,10 +628,10 @@ def build_scene_1_message(data, date_str, time_ago_str, recovery_text=""):
 
 <b>🧠 AI Summary</b>
 
-{get_ai_summary(trend_score_first, 50, "Low")}
+{get_ai_summary(avg_trend, avg_momentum, risk_level)}
 
 """
-    # 3. 构建每个资产的区块
+    # 5. 构建每个资产的详细区块（不变，继续展示每个资产的具体数据）
     asset_blocks = []
     for ticker, info in data.items():
         df = info["df"]
@@ -633,7 +650,6 @@ def build_scene_1_message(data, date_str, time_ago_str, recovery_text=""):
         asset_name = escape_html(info["name"])
         symbol = escape_html(info["symbol"])
         
-        # 颜色
         trend_color = "🟢" if trend_score >= 70 else ("🟠" if trend_score >= 50 else "🔴")
         momentum_color = "🟢" if momentum_score >= 50 else ("🟠" if momentum_score >= 30 else "🔴")
         
@@ -644,14 +660,13 @@ def build_scene_1_message(data, date_str, time_ago_str, recovery_text=""):
             avg_return = historical.get("periods", {}).get(90, {}).get("avg_return", 0)
             max_dd = historical.get("periods", {}).get(90, {}).get("max_dd", 0)
             if match_count < SCENE_THRESHOLDS["historical"]["rare_threshold"]:
-                match_text = f"<b>📚 Historical Evidence</b>\n\n• {match_count} similar cases\n• 90-Day Win Rate: {win_rate_90d:.1f}%\n• Avg Return: {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
+                match_text = f"📚 <b>Historical Evidence</b>\n• {match_count} similar cases\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return: {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
             else:
-                match_text = f"<b>📚 Historical Match</b>\n(15-year historical comparison)\n\n• {match_count} similar cases\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return (90D): {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
+                match_text = f"📚 <b>Historical Match</b> (15-year comparison)\n• {match_count} similar cases\n• Win Rate: {win_rate_90d:.1f}%\n• Avg Return (90D): {avg_return:+.1f}%\n• Max Drawdown: {max_dd:.1f}%"
         else:
-            match_text = "<b>📚 Historical Match</b>\nInsufficient data"
-        # 组装单个资产块
-        block = f"""━━━━━━━━━━━━
+            match_text = "📚 <b>Historical Match</b>\nInsufficient data"
         
+        block = f"""━━━━━━━━━━━━
 <b>📈 {asset_name}</b>
 
 {trend_color} Trend: {trend_score}/100
@@ -667,8 +682,8 @@ RSI (14): {rsi:.1f}
 """
         asset_blocks.append(block)
     
-    # 4. 构建底部（动态 Monitor 和 Daily Insight）
-    monitor_text = build_monitor(close_first, ma200_first, 50)  # 用第一个资产的数据，实际可改进
+    # 6. 底部
+    monitor_text = build_monitor(close_first, ma200_first, 50)  # 仍使用第一个资产的监控（简化）
     daily_insight = get_daily_insight(action_type)
     
     footer = f"""
@@ -687,10 +702,9 @@ RSI (14): {rsi:.1f}
 
 <i>This content is for informational purposes only. It does not constitute financial or investment advice.</i>
 """
-    # 5. 组合完整消息
+    # 7. 组合消息
     full_message = header + "\n".join(asset_blocks) + footer
     
-    # 6. 安全检查：如果消息超过 4096 字符，拆分
     if len(full_message) > 4096:
         first_part = header + asset_blocks[0] + "\n━━━━━━━━━━━━\n(Message continues in next part)"
         second_part = "\n".join(asset_blocks[1:]) + footer
