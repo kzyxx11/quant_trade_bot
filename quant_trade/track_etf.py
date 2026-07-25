@@ -567,7 +567,7 @@ def build_monitor(close_price, ma200, momentum_score):
     # 返回不带星号的列表，用换行连接
     return "\n".join(items)
 
-def build_scene_1_message(data, date_str, time_ago_str):
+def build_scene_1_message(data, date_str, time_ago_str, recovery_text=""):
     """
     场景一：📊 ETF DAILY REPORT（正常市场，静默推送）
     符合所有新格式要求：英文、加粗、分隔线缩短、标签对齐、无星号、动态相对时间
@@ -602,6 +602,7 @@ def build_scene_1_message(data, date_str, time_ago_str):
 📊 <b>ETF DAILY REPORT</b>
 ━━━━━━━━━━━━
 
+{recovery_text}
 🟢 <b>Market: {market_status}</b>
 🟢 <b>Risk: Low</b>
 💰 <b>DCA: {dca_status}</b>
@@ -1590,7 +1591,7 @@ def main():
         if last_state:
             last_scene = last_state.get("scene")
             last_date_str = last_state.get("date")
-        if last_scene in ["SCENE_2", "SCENE_3", "SCENE_4"] and scene_key == "SCENE_1":
+            if last_scene in ["SCENE_2", "SCENE_3", "SCENE_4"] and scene_key == "SCENE_1":
                 is_recovery = True
                 if last_date_str:
                     try:
@@ -1654,7 +1655,9 @@ def main():
             else:
                 send_to_telegram(None, msg, disable_notification=silent)
 
-
+        # 保存当前场景状态（供下次使用）
+        today_str = datetime.now(tz_gmt8).strftime("%Y-%m-%d")
+        save_last_scene(scene_key, today_str)
 
         # ============================================================
         # 📌 完成加载消息编辑
