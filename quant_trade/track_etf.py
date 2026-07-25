@@ -601,7 +601,8 @@ def build_scene_1_message(data, date_str, time_ago_str, recovery_text=""):
 ━━━━━━━━━━━━
 📊 <b>ETF DAILY REPORT</b>
 ━━━━━━━━━━━━
-{recovery_text}\n
+{recovery_text}
+
 🟢 <b>Market: {market_status}</b>
 🟢 <b>Risk: Low</b>
 💰 <b>DCA: {dca_status}</b>
