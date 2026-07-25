@@ -9,6 +9,9 @@ import matplotlib.pyplot as plt
 import requests
 import yfinance as yf
 
+import requests_cache
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 TELEGRAM_TOKEN = os.getenv("TG_BOT_TOKEN")
 CHAT_ID = os.getenv("TG_CHAT_ID")
 
@@ -177,51 +180,59 @@ ETFS = {
 
 def fetch_etf_data():
     print("Fetching latest ETF price data from Yahoo Finance...")
+    
+    # 启用缓存（缓存 1 小时）
+    requests_cache.install_cache('yfinance_cache', expire_after=3600)
+    
     data = {}
-
-    for ticker, meta in ETFS.items():
+    
+    # 定义单个 ticker 的下载任务
+    def fetch_single(ticker, meta):
         try:
             df = yf.Ticker(ticker).history(period="15y", auto_adjust=False)
+            if df is None or df.empty:
+                print(f"Warning: no data returned for {ticker}.")
+                return None
+            
+            df = df.dropna(subset=["Close"]).copy()
+            if len(df) < MIN_ROWS_REQUIRED:
+                print(f"Warning: {ticker} has only {len(df)} valid rows; {MIN_ROWS_REQUIRED} rows required.")
+                return None
+            
+            df["MA50"] = df["Close"].rolling(window=50).mean()
+            df["MA200"] = df["Close"].rolling(window=200).mean()
+            
+            delta = df["Close"].diff()
+            gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+            rs = gain / (loss + 1e-10)
+            df["RSI"] = 100 - (100 / (1 + rs))
+            
+            df = df.dropna(subset=["MA50", "MA200", "RSI"])
+            if df.empty:
+                print(f"Warning: technical attributes could not be computed for {ticker}.")
+                return None
+            
+            return {
+                "df": df.tail(CHART_LOOKBACK_ROWS),
+                "df_full": df,
+                "name": meta["name"],
+                "currency": meta["currency"],
+                "symbol": meta["symbol"],
+            }
         except Exception as error:
             print(f"Warning: failed to fetch {ticker}: {error}")
-            continue
-
-        if df is None or df.empty:
-            print(f"Warning: no data returned for {ticker}.")
-            continue
-
-        df = df.dropna(subset=["Close"]).copy()
-
-        if len(df) < MIN_ROWS_REQUIRED:
-            print(
-                f"Warning: {ticker} has only {len(df)} valid rows; "
-                f"{MIN_ROWS_REQUIRED} rows are required for calculations."
-            )
-            continue
-
-        df["MA50"] = df["Close"].rolling(window=50).mean()
-        df["MA200"] = df["Close"].rolling(window=200).mean()
-
-        delta = df["Close"].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / (loss + 1e-10)
-        df["RSI"] = 100 - (100 / (1 + rs))
-
-        df = df.dropna(subset=["MA50", "MA200", "RSI"])
-
-        if df.empty:
-            print(f"Warning: technical attributes could not be computed for {ticker}.")
-            continue
-
-        data[ticker] = {
-            "df": df.tail(CHART_LOOKBACK_ROWS),
-            "df_full": df,
-            "name": meta["name"],
-            "currency": meta["currency"],
-            "symbol": meta["symbol"],
-        }
-
+            return None
+    
+    # 并行下载所有 ticker
+    with ThreadPoolExecutor(max_workers=len(ETFS)) as executor:
+        future_to_ticker = {executor.submit(fetch_single, ticker, meta): ticker for ticker, meta in ETFS.items()}
+        for future in as_completed(future_to_ticker):
+            ticker = future_to_ticker[future]
+            result = future.result()
+            if result:
+                data[ticker] = result
+    
     return data
 
 
@@ -1342,13 +1353,15 @@ def send_to_telegram(chart_path, text_message, disable_notification=False, retri
                             },
                             files={"photo": photo},
                         )
+                    time.sleep(0.5)  # 图片发送后等待 0.5 秒
 
                     if len(text_message) <= TELEGRAM_CAPTION_LIMIT:
                         print(f"Telegram chart sent to {target_chat_id} successfully.")
                         success = True
                         break
 
-                for message_part in split_telegram_message(text_message):
+                parts = split_telegram_message(text_message)
+                for idx, message_part in enumerate(parts):
                     post_telegram_request(
                         text_url,
                         {
@@ -1358,6 +1371,8 @@ def send_to_telegram(chart_path, text_message, disable_notification=False, retri
                             "disable_notification": disable_notification,
                         },
                     )
+                    if idx < len(parts) - 1:
+                        time.sleep(0.3)  # 每条文本消息间隔 0.3 秒
 
                 print(f"Telegram text sent to {target_chat_id} successfully.")
                 success = True
