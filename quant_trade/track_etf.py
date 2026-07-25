@@ -136,6 +136,25 @@ def escape_html(text):
         return ""
     return html.escape(str(text))
 
+import json
+
+def load_last_scene():
+    """读取上次存储的场景状态"""
+    state_path = Path("docs/last_scene.json")
+    if not state_path.exists():
+        return None
+    try:
+        with open(state_path, "r") as f:
+            return json.load(f)
+    except:
+        return None
+
+def save_last_scene(scene_key, date_str):
+    """存储当前场景和日期"""
+    state_path = Path("docs/last_scene.json")
+    with open(state_path, "w") as f:
+        json.dump({"scene": scene_key, "date": date_str}, f)
+
 MIN_ROWS_REQUIRED = 200
 CHART_LOOKBACK_ROWS = 252
 OUTPUT_DIR = Path("outputs")
@@ -1563,6 +1582,28 @@ def main():
         scene_key, _ = _determine_scene(trend_score_first, momentum_score_first, risk_level, match_count)
         print(f"[Scene] Determined scene: {scene_key}")
 
+        # ---- 恢复检测 ----
+        last_state = load_last_scene()
+        is_recovery = False
+        days_ago = 0
+        recovery_message = ""
+        if last_state:
+            last_scene = last_state.get("scene")
+            last_date_str = last_state.get("date")
+        if last_scene in ["SCENE_2", "SCENE_3", "SCENE_4"] and scene_key == "SCENE_1":
+                is_recovery = True
+                if last_date_str:
+                    try:
+                        last_date = datetime.strptime(last_date_str, "%Y-%m-%d").date()
+                        today = datetime.now(tz_gmt8).date()
+                        days_ago = (today - last_date).days
+                    except:
+                        days_ago = 1
+                if days_ago <= 1:
+                    recovery_message = "✅ Market has returned to normal from the alert state yesterday."
+                else:
+                    recovery_message = f"✅ Market has returned to normal from the alert state {days_ago} days ago."
+        
         # 获取前一天数据（用于场景二的变化检测）
         import pandas as pd
         history_path = Path("docs/history.csv")
@@ -1588,7 +1629,7 @@ def main():
         time_ago = "Just now"
 
         if scene_key == "SCENE_1":
-            messages = build_scene_1_message(data, display_date, time_ago)
+            messages = build_scene_1_message(data, display_date, time_ago, recovery_message)
         elif scene_key == "SCENE_2":
             messages = build_scene_2_message(data, display_date, time_ago, prev_changes)
         elif scene_key == "SCENE_3":
@@ -1612,6 +1653,8 @@ def main():
                 send_to_telegram(chart_path, msg, disable_notification=silent)
             else:
                 send_to_telegram(None, msg, disable_notification=silent)
+
+
 
         # ============================================================
         # 📌 完成加载消息编辑
