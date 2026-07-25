@@ -171,8 +171,8 @@ def fetch_etf_data():
     requests_cache.install_cache('yfinance_cache', expire_after=3600)
     
     data = {}
+    failed_tickers = []
     
-    # 定义单个 ticker 的下载任务
     def fetch_single(ticker, meta):
         try:
             df = yf.Ticker(ticker).history(period="15y", auto_adjust=False)
@@ -218,9 +218,18 @@ def fetch_etf_data():
             result = future.result()
             if result:
                 data[ticker] = result
+            else:
+                failed_tickers.append(ticker)
+    
+    # 如果所有 ticker 都失败，返回错误信息
+    if not data:
+        return {"error": f"All data sources failed: {', '.join(failed_tickers)}"}
+    
+    # 如果有部分失败，打印警告但继续
+    if failed_tickers:
+        print(f"Warning: {len(failed_tickers)} ticker(s) failed: {', '.join(failed_tickers)}")
     
     return data
-
 
 def calculate_trend_score(close_price, ma50, ma200):
     score = 50
@@ -1617,7 +1626,33 @@ def main():
         if not data:
             print("No data fetched. Exiting.")
             edit_loading_message(chat_id_for_edit, message_id, error="No data from Yahoo Finance.")
+            # 发送 fallback 消息
+            fallback_msg = (
+                "⚠️ <b>Data Service Unavailable</b>\n\n"
+                "Unable to fetch market data at this time.\n"
+                "Possible reasons:\n"
+                "• Yahoo Finance API is temporarily unavailable\n"
+                "• Network connectivity issues\n"
+                "• Rate limit exceeded\n\n"
+                "Please try again in a few minutes.\n"
+                "If the issue persists, contact support."
+        )
+            send_to_telegram(None, fallback_msg, disable_notification=False)
             return
+
+    # 如果是错误字典
+    if isinstance(data, dict) and "error" in data:
+        error_msg = data["error"]
+        print(f"No data fetched: {error_msg}")
+        edit_loading_message(chat_id_for_edit, message_id, error=error_msg)
+        fallback_msg = (
+            f"⚠️ <b>Data Service Unavailable</b>\n\n"
+            f"{error_msg}\n\n"
+            "Please try again in a few minutes.\n"
+            "If the issue persists, contact support."
+        )
+        send_to_telegram(None, fallback_msg, disable_notification=False)
+        return
 
         # 步骤1：数据加载完成
         edit_loading_message(chat_id_for_edit, message_id, 1)
