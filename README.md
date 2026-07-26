@@ -15,7 +15,7 @@ A complete Telegram bot that analyzes ETF trends, momentum, and historical proba
 
 👉 **Telegram Bot:** [@MyQuantTrackerBot](https://t.me/my_custom_tracker_bot)  
 📢 **Public Channel:** [@ETF_Trend_Monitor](https://t.me/ETF_Trend_Monitor)  
-📅 **Daily update:** around 08:80 GMT+8 (after US market close)
+📅 **Daily update:** around 08:00 GMT+8 (after US market close)
 
 📝 Read the full story: [Dev.to](https://dev.to/kzyxx11/how-i-built-a-serverless-etf-backtest-bot-with-github-actions-and-telegram-3g20) | [Medium](https://medium.com/@erickhoo1104/how-i-built-a-serverless-etf-backtest-bot-with-github-actions-and-telegram-2812ab010f98?sharedUserId=erickhoo1104)
 
