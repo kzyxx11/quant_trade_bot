@@ -1477,6 +1477,53 @@ def send_to_telegram(chart_path, text_message, disable_notification=False, retri
 
     return all_success
 
+def send_to_telegram_for_user(chart_path, text_message, chat_id, disable_notification=False, retries=3):
+    """发送消息给指定的 chat_id"""
+    if not TELEGRAM_TOKEN or not chat_id:
+        return False
+
+    photo_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendPhoto"
+    text_url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+
+    for attempt in range(1, retries + 1):
+        try:
+            if chart_path and Path(chart_path).exists():
+                with Path(chart_path).open("rb") as photo:
+                    caption = text_message if len(text_message) <= TELEGRAM_CAPTION_LIMIT else "📊 ETF trend update"
+                    post_telegram_request(
+                        photo_url,
+                        {
+                            "chat_id": chat_id,
+                            "caption": caption,
+                            "parse_mode": "HTML",
+                            "disable_notification": disable_notification,
+                        },
+                        files={"photo": photo},
+                    )
+                if len(text_message) <= TELEGRAM_CAPTION_LIMIT:
+                    print(f"Telegram chart sent to {chat_id} successfully.")
+                    return True
+
+            for message_part in split_telegram_message(text_message):
+                post_telegram_request(
+                    text_url,
+                    {
+                        "chat_id": chat_id,
+                        "text": message_part,
+                        "parse_mode": "HTML",
+                        "disable_notification": disable_notification,
+                    },
+                )
+            print(f"Telegram text sent to {chat_id} successfully.")
+            return True
+
+        except requests.RequestException as error:
+            print(f"Telegram send failed to {chat_id} on attempt {attempt}/{retries}: {error}")
+            if attempt < retries:
+                time.sleep(backoff_seconds)
+
+    return False
+
 def append_history(data, date_str):
     """
     把当天每个资产的核心指标追加到 history.csv
@@ -1702,6 +1749,10 @@ def generate_html(data, date_str):
     return html_template
     
 def main():
+
+    # 读取运行模式
+    run_mode = os.getenv("RUN_MODE", "manual")
+    
     # 读取传入的命令（来自 Cloudflare Worker）
     command = os.getenv("COMMAND", "full")
 
@@ -1893,13 +1944,30 @@ def main():
             messages = build_scene_1_message(data, display_date, time_ago)
             print(f"[Scene] Unknown scene {scene_key}, falling back to SCENE_1.")
 
-        silent = (scene_key == "SCENE_1")
-
-        for idx, msg in enumerate(messages):
-            if idx == 0:
-                send_to_telegram(chart_path, msg, disable_notification=silent)
-            else:
-                send_to_telegram(None, msg, disable_notification=silent)
+                # --- 发送报告 ---
+        if run_mode == "scheduled":
+            # 定时任务：发送给所有订阅用户
+            subscribers = load_subscribers()
+            if not subscribers:
+                subscribers = [CHAT_ID]  # 至少发给自己
+            print(f"[Scheduled] Sending to {len(subscribers)} subscribers")
+            for chat_id in subscribers:
+                # 对每个用户发送完整报告（图片 + 文字）
+                for idx, msg in enumerate(messages):
+                    if idx == 0:
+                        send_to_telegram_for_user(chart_path, msg, chat_id, disable_notification=False)
+                    else:
+                        send_to_telegram_for_user(None, msg, chat_id, disable_notification=False)
+                # 避免触发速率限制
+                time.sleep(0.3)
+        else:
+            # 手动模式：只发给自己（现有逻辑）
+            silent = (scene_key == "SCENE_1")
+            for idx, msg in enumerate(messages):
+                if idx == 0:
+                    send_to_telegram(chart_path, msg, disable_notification=silent)
+                else:
+                    send_to_telegram(None, msg, disable_notification=silent)
 
         # 保存当前场景状态
         today_str = datetime.now(tz_gmt8).strftime("%Y-%m-%d")
