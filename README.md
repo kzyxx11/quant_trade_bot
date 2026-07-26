@@ -3,7 +3,7 @@ Stop guessing. Start knowing.
 # Quant Trade Bot – Telegram Bot for ETF Analysis
 
 [![Join Telegram Channel](https://img.shields.io/badge/Join-Telegram%20Channel-0088cc?style=for-the-badge&logo=telegram)](https://t.me/ETF_Trend_Monitor)
-[![Try the Bot](https://img.shields.io/badge/Try%20Bot-on%20Telegram-26A5E4?style=for-the-badge&logo=telegram)](https://t.me/MyQuantTrackerBot)
+[![Try the Bot](https://img.shields.io/badge/Try%20Bot-on%20Telegram-26A5E4?style=for-the-badge&logo=telegram)](https://t.me/my_custom_tracker_bot)
 
 📊 **Live Status:** [![Daily Run](https://github.com/kzyxx11/quant_trade_bot/actions/workflows/run_bot.yml/badge.svg)](https://github.com/kzyxx11/quant_trade_bot/actions)
 
