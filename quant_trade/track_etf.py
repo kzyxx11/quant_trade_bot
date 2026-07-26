@@ -560,6 +560,28 @@ def get_daily_insight(action_type):
     else:
         return "Monitor key levels. No change to current strategy."
 
+def build_price_message(data):
+    """
+    只返回价格 + MA50 + MA200 + RSI
+    """
+    lines = ["📊 *Price Snapshot*"]
+    for ticker, info in data.items():
+        df = info["df"]
+        close_price = df["Close"].iloc[-1]
+        ma50 = df["MA50"].iloc[-1]
+        ma200 = df["MA200"].iloc[-1]
+        rsi = df["RSI"].iloc[-1]
+        symbol = info["symbol"]
+        name = info["name"]
+        
+        lines.append(f"\n*{name}*")
+        lines.append(f"Latest: {symbol}{close_price:.2f}")
+        lines.append(f"MA50: {symbol}{ma50:.2f}")
+        lines.append(f"MA200: {symbol}{ma200:.2f}")
+        lines.append(f"RSI (14): {rsi:.1f}")
+    
+    return "\n".join(lines)
+
 def build_monitor(close_price, ma200, momentum_score):
     items = []
     if close_price < ma200:
@@ -1314,28 +1336,6 @@ def edit_loading_message(chat_id, message_id, step_index, error=None):
     except Exception as e:
         print(f"[EditMessage] Exception: {e}")
 
-def build_price_message(data):
-    """
-    只返回价格 + MA50 + MA200 + RSI
-    """
-    lines = ["📊 *Price Snapshot*"]
-    for ticker, info in data.items():
-        df = info["df"]
-        close_price = df["Close"].iloc[-1]
-        ma50 = df["MA50"].iloc[-1]
-        ma200 = df["MA200"].iloc[-1]
-        rsi = df["RSI"].iloc[-1]
-        symbol = info["symbol"]
-        name = info["name"]
-        
-        lines.append(f"\n*{name}*")
-        lines.append(f"Latest: {symbol}{close_price:.2f}")
-        lines.append(f"MA50: {symbol}{ma50:.2f}")
-        lines.append(f"MA200: {symbol}{ma200:.2f}")
-        lines.append(f"RSI (14): {rsi:.1f}")
-    
-    return "\n".join(lines)
-
 def send_to_telegram(chart_path, text_message, disable_notification=False, retries=3, backoff_seconds=5):
     if not TELEGRAM_TOKEN or not CHAT_ID:
         print("Error: TG_BOT_TOKEN and TG_CHAT_ID must be configured as repository secrets.")
@@ -1631,23 +1631,9 @@ def generate_html(data, date_str):
     return html_template
     
 def main():
-    # 读取传入的命令
-    command = os.getenv("COMMAND", "full")  # 默认为 full（完整报告）
+    # 读取传入的命令（来自 Cloudflare Worker）
+    command = os.getenv("COMMAND", "full")
 
-    # 根据命令选择不同的消息构建方式
-    if command == "price":
-        message = build_price_message(data)
-        send_to_telegram(None, message, disable_notification=False)
-        return  # 直接返回，不发送图表和完整报告
-    
-    elif command == "stats":
-        # 稍后实现
-        pass
-    
-    elif command == "chart":
-        # 稍后实现
-        pass
-    
     # 读取可能从 Worker 传来的 message_id
     message_id = os.getenv("MESSAGE_ID")
     chat_id_from_payload = os.getenv("CHAT_ID_FROM_PAYLOAD")
@@ -1658,40 +1644,49 @@ def main():
         chat_id_for_edit = CHAT_ID
 
     try:
-        # 步骤0：开始
-        edit_loading_message(chat_id_for_edit, message_id, 0)
-
+        # ===== 1. 获取数据（所有命令都需要） =====
         data = fetch_etf_data()
-        
-        # === 数据源失败 fallback ===
+
+        # 数据源失败 fallback
         if not data:
             print("No data fetched. Exiting.")
-            edit_loading_message(chat_id_for_edit, message_id, error="No data from Yahoo Finance.")
+            edit_loading_message(chat_id_for_edit, message_id, 0, error="No data from Yahoo Finance.")
             fallback_msg = (
                 "⚠️ <b>Data Service Unavailable</b>\n\n"
                 "Unable to fetch market data at this time.\n"
-                "Possible reasons:\n"
-                "• Yahoo Finance API is temporarily unavailable\n"
-                "• Network connectivity issues\n"
-                "• Rate limit exceeded\n\n"
-                "Please try again in a few minutes.\n"
-                "If the issue persists, contact support."
+                "Please try again in a few minutes."
             )
             send_to_telegram(None, fallback_msg, disable_notification=False)
             return
-        
+
         if isinstance(data, dict) and "error" in data:
             error_msg = data["error"]
             print(f"No data fetched: {error_msg}")
-            edit_loading_message(chat_id_for_edit, message_id, error=error_msg)
-            fallback_msg = (
-                f"⚠️ <b>Data Service Unavailable</b>\n\n"
-                f"{error_msg}\n\n"
-                "Please try again in a few minutes.\n"
-                "If the issue persists, contact support."
-            )
+            edit_loading_message(chat_id_for_edit, message_id, 0, error=error_msg)
+            fallback_msg = f"⚠️ <b>Data Service Unavailable</b>\n\n{error_msg}\n\nPlease try again later."
             send_to_telegram(None, fallback_msg, disable_notification=False)
             return
+
+        # ===== 2. 根据命令分支处理 =====
+        if command == "price":
+            # 只返回价格信息
+            price_msg = build_price_message(data)
+            send_to_telegram(None, price_msg, disable_notification=False)
+            return
+
+        elif command == "stats":
+            # 暂未实现
+            send_to_telegram(None, "⏳ /stats is under development. Use /check for full report.", disable_notification=False)
+            return
+
+        elif command == "chart":
+            # 暂未实现
+            send_to_telegram(None, "⏳ /chart is under development. Use /check for full report.", disable_notification=False)
+            return
+
+        # ===== 3. 默认：完整报告流程（command == "full" 或其他） =====
+        # 步骤0：开始
+        edit_loading_message(chat_id_for_edit, message_id, 0)
 
         # 步骤1：数据加载完成
         edit_loading_message(chat_id_for_edit, message_id, 1)
@@ -1702,20 +1697,16 @@ def main():
 
         # 步骤2：历史匹配
         edit_loading_message(chat_id_for_edit, message_id, 2)
-
         generate_trend_chart()
 
         # 步骤3：生成图表
         edit_loading_message(chat_id_for_edit, message_id, 3)
-
         chart_path = generate_chart(data)
 
         # 步骤4：生成报告
         edit_loading_message(chat_id_for_edit, message_id, 4)
 
-        # ============================================================
-        # 📌 场景判定 + 消息分发
-        # ============================================================
+        # ----- 场景判定 + 消息分发 -----
         first_ticker = list(data.keys())[0]
         df_first = data[first_ticker]["df"]
         close_first = df_first["Close"].iloc[-1]
@@ -1741,16 +1732,13 @@ def main():
         scene_key, _ = _determine_scene(trend_score_first, momentum_score_first, risk_level, match_count)
         print(f"[Scene] Determined scene: {scene_key}")
 
-        # ---- 恢复检测 ----
+        # 恢复检测
         last_state = load_last_scene()
-        is_recovery = False
-        days_ago = 0
         recovery_message = ""
         if last_state:
             last_scene = last_state.get("scene")
             last_date_str = last_state.get("date")
             if last_scene in ["SCENE_2", "SCENE_3", "SCENE_4"] and scene_key == "SCENE_1":
-                is_recovery = True
                 if last_date_str:
                     try:
                         last_date = datetime.strptime(last_date_str, "%Y-%m-%d").date()
@@ -1758,6 +1746,8 @@ def main():
                         days_ago = (today - last_date).days
                     except:
                         days_ago = 1
+                else:
+                    days_ago = 1
                 if days_ago <= 1:
                     recovery_message = "✅ Market has returned to normal from the alert state yesterday."
                 else:
@@ -1799,7 +1789,7 @@ def main():
             print(f"[Scene] Unknown scene {scene_key}, falling back to SCENE_1.")
 
         silent = (scene_key == "SCENE_1")
-        
+
         for idx, msg in enumerate(messages):
             if idx == 0:
                 send_to_telegram(chart_path, msg, disable_notification=silent)
@@ -1810,9 +1800,7 @@ def main():
         today_str = datetime.now(tz_gmt8).strftime("%Y-%m-%d")
         save_last_scene(scene_key, today_str)
 
-        # ============================================================
-        # 📌 完成加载消息编辑
-        # ============================================================
+        # 完成加载消息编辑
         if message_id and chat_id_for_edit:
             url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/editMessageText"
             try:
