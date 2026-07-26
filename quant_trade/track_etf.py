@@ -582,6 +582,42 @@ def build_price_message(data):
     
     return "\n".join(lines)
 
+def build_stats_message(data):
+    """
+    只返回 Trend Score + Momentum Score + 简短解释
+    """
+    lines = ["📊 *Trend & Momentum Snapshot*"]
+    for ticker, info in data.items():
+        df = info["df"]
+        close_price = df["Close"].iloc[-1]
+        ma50 = df["MA50"].iloc[-1]
+        ma200 = df["MA200"].iloc[-1]
+        
+        trend_score = calculate_trend_score(close_price, ma50, ma200)
+        momentum_score = calculate_momentum_score(df["RSI"])
+        name = info["name"]
+        
+        # 文字解释
+        if trend_score >= 70:
+            trend_text = "Strong uptrend"
+        elif trend_score >= 50:
+            trend_text = "Constructive"
+        else:
+            trend_text = "Weak / Bearish"
+        
+        if momentum_score >= 60:
+            momentum_text = "Strong momentum"
+        elif momentum_score >= 40:
+            momentum_text = "Balanced"
+        else:
+            momentum_text = "Weak momentum"
+        
+        lines.append(f"\n*{name}*")
+        lines.append(f"Trend: {trend_score}/100 — {trend_text}")
+        lines.append(f"Momentum: {momentum_score}/100 — {momentum_text}")
+    
+    return "\n".join(lines)
+
 def build_monitor(close_price, ma200, momentum_score):
     items = []
     if close_price < ma200:
@@ -1680,13 +1716,13 @@ def main():
             return
 
         elif command == "stats":
-            # 暂未实现
-            send_to_telegram(None, "⏳ /stats is under development. Use /check for full report.", disable_notification=False)
-            return
-
-        elif command == "chart":
-            # 暂未实现
-            send_to_telegram(None, "⏳ /chart is under development. Use /check for full report.", disable_notification=False)
+            stats_msg = build_stats_message(data)
+            url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+            requests.post(url, json={
+                "chat_id": CHAT_ID,
+                "parse_mode": "Markdown",
+                "text": stats_msg
+            })
             return
 
         # ===== 3. 默认：完整报告流程（command == "full" 或其他） =====
