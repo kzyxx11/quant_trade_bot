@@ -127,6 +127,41 @@ def escape_html(text):
 
 import json
 
+SUBSCRIBERS_FILE = Path("docs/subscribers.json")
+
+def load_subscribers():
+    """读取订阅列表"""
+    if not SUBSCRIBERS_FILE.exists():
+        return []
+    try:
+        with open(SUBSCRIBERS_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return []
+
+def save_subscribers(subscribers):
+    """保存订阅列表"""
+    with open(SUBSCRIBERS_FILE, "w") as f:
+        json.dump(subscribers, f, indent=2)
+
+def add_subscriber(chat_id):
+    """添加订阅用户"""
+    subscribers = load_subscribers()
+    if chat_id not in subscribers:
+        subscribers.append(chat_id)
+        save_subscribers(subscribers)
+        return True
+    return False
+
+def remove_subscriber(chat_id):
+    """移除订阅用户"""
+    subscribers = load_subscribers()
+    if chat_id in subscribers:
+        subscribers.remove(chat_id)
+        save_subscribers(subscribers)
+        return True
+    return False
+
 def load_last_scene():
     """读取上次存储的场景状态"""
     state_path = Path("docs/last_scene.json")
@@ -1732,6 +1767,26 @@ def main():
                 send_to_telegram(chart_path, "📊 Chart only", disable_notification=False)
             else:
                 send_to_telegram(None, "⚠️ Chart generation failed.", disable_notification=False)
+            return
+
+        elif command == "subscribe":
+            chat_id = CHAT_ID  # 当前用户的 Chat ID
+            if add_subscriber(chat_id):
+                msg = "✅ You have been subscribed to daily updates."
+            else:
+                msg = "ℹ️ You are already subscribed."
+            url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+            requests.post(url, json={"chat_id": chat_id, "text": msg})
+            return
+
+        elif command == "unsubscribe":
+            chat_id = CHAT_ID
+            if remove_subscriber(chat_id):
+                msg = "❌ You have been unsubscribed from daily updates."
+            else:
+                msg = "ℹ️ You were not subscribed."
+            url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+            requests.post(url, json={"chat_id": chat_id, "text": msg})
             return
         
         # ===== 3. 默认：完整报告流程（command == "full" 或其他） =====
