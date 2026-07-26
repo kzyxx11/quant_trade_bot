@@ -1725,6 +1725,15 @@ def main():
             })
             return
 
+        elif command == "chart":
+            # 生成图表（不发送文字）
+            chart_path = generate_chart(data)
+            if chart_path:
+                send_to_telegram(chart_path, "📊 Chart only", disable_notification=False)
+            else:
+                send_to_telegram(None, "⚠️ Chart generation failed.", disable_notification=False)
+            return
+        
         # ===== 3. 默认：完整报告流程（command == "full" 或其他） =====
         # 步骤0：开始
         edit_loading_message(chat_id_for_edit, message_id, 0)
