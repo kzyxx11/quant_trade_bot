@@ -1314,6 +1314,28 @@ def edit_loading_message(chat_id, message_id, step_index, error=None):
     except Exception as e:
         print(f"[EditMessage] Exception: {e}")
 
+def build_price_message(data):
+    """
+    只返回价格 + MA50 + MA200 + RSI
+    """
+    lines = ["📊 *Price Snapshot*"]
+    for ticker, info in data.items():
+        df = info["df"]
+        close_price = df["Close"].iloc[-1]
+        ma50 = df["MA50"].iloc[-1]
+        ma200 = df["MA200"].iloc[-1]
+        rsi = df["RSI"].iloc[-1]
+        symbol = info["symbol"]
+        name = info["name"]
+        
+        lines.append(f"\n*{name}*")
+        lines.append(f"Latest: {symbol}{close_price:.2f}")
+        lines.append(f"MA50: {symbol}{ma50:.2f}")
+        lines.append(f"MA200: {symbol}{ma200:.2f}")
+        lines.append(f"RSI (14): {rsi:.1f}")
+    
+    return "\n".join(lines)
+
 def send_to_telegram(chart_path, text_message, disable_notification=False, retries=3, backoff_seconds=5):
     if not TELEGRAM_TOKEN or not CHAT_ID:
         print("Error: TG_BOT_TOKEN and TG_CHAT_ID must be configured as repository secrets.")
@@ -1609,6 +1631,23 @@ def generate_html(data, date_str):
     return html_template
     
 def main():
+    # 读取传入的命令
+    command = os.getenv("COMMAND", "full")  # 默认为 full（完整报告）
+
+    # 根据命令选择不同的消息构建方式
+    if command == "price":
+        message = build_price_message(data)
+        send_to_telegram(None, message, disable_notification=False)
+        return  # 直接返回，不发送图表和完整报告
+    
+    elif command == "stats":
+        # 稍后实现
+        pass
+    
+    elif command == "chart":
+        # 稍后实现
+        pass
+    
     # 读取可能从 Worker 传来的 message_id
     message_id = os.getenv("MESSAGE_ID")
     chat_id_from_payload = os.getenv("CHAT_ID_FROM_PAYLOAD")
