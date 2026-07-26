@@ -100,16 +100,24 @@ The analysis is built on three layers:
 
 Telegram User
 │ (sends /check)
+
 ▼
+
 Cloudflare Worker (webhook gateway)
 │ (triggers GitHub Actions)
+
 ▼
+
 GitHub Actions (runs Python script)
 │ (fetches 15y data, computes scores, generates chart)
+
 ▼
+
 Telegram Bot API
 │ (delivers chart + text report)
+
 ▼
+
 User's Telegram chat
 
 
