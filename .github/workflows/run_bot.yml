@@ -35,6 +35,7 @@ jobs:
           PUBLIC_CHANNEL_ID: ${{ secrets.PUBLIC_CHANNEL_ID }}
           MESSAGE_ID: ${{ github.event.client_payload.message_id }}
           CHAT_ID_FROM_PAYLOAD: ${{ github.event.client_payload.chat_id }}
+          COMMAND: ${{ github.event.client_payload.command }}
         run: python quant_trade/track_etf.py
 
       - name: Debug repository name
