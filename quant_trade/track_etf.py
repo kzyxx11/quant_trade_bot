@@ -564,7 +564,7 @@ def build_price_message(data):
     """
     只返回价格 + MA50 + MA200 + RSI
     """
-    lines = ["📊 *Price Snapshot*"]
+    lines = ["📊 Price Snapshot"]
     for ticker, info in data.items():
         df = info["df"]
         close_price = df["Close"].iloc[-1]
@@ -1671,7 +1671,12 @@ def main():
         if command == "price":
             # 只返回价格信息
             price_msg = build_price_message(data)
-            send_to_telegram(None, price_msg, disable_notification=False)
+            url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+            requests.post(url, json={
+                "chat_id": CHAT_ID,
+                "text": price_msg,
+                "parse_mode": "Markdown"
+            })
             return
 
         elif command == "stats":
