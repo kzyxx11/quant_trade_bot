@@ -61,3 +61,4 @@ date,ticker,close,trend_score,momentum_score,match_count,win_rate_90d
 2026-08-29,CSPX.L,826.89,97,35,197,82.2
 2026-09-01,QQQM,295.18,99,58,123,76.4
 2026-09-01,CSPX.L,828.70,97,43,297,79.8
+2026-09-02,QQQM,291.40,77,33,30,100.0
